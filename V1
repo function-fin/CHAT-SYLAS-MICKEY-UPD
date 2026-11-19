@@ -34,7 +34,8 @@ local ICONS = {
 	PowerOff = "rbxassetid://129423512956533",
 	Bell = "rbxassetid://106054450773402",
 	CopyText = "rbxassetid://89696314837335",
-	Freeze = "rbxassetid://121256149182197"
+	Freeze = "rbxassetid://121256149182197",
+	CloseX = "rbxassetid://11432556030" -- Ícone de X para limpar target
 }
 
 local ChatSettings = {
@@ -45,6 +46,7 @@ local ChatSettings = {
 
 local mutedPlayers = {}
 local messagesByUser = {}
+local currentTarget = nil -- Guarda o nome do jogador para quem estamos mandando PV
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrivateChatUI"
@@ -130,6 +132,9 @@ local function MakeDraggable(guiObject, dragHandle)
 	return function() return hasMoved end
 end
 
+-- ==========================================
+-- BOTÃO LATERAL
+-- ==========================================
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Name = "ChatToggleButton"
 ToggleButton.Size = UDim2.new(0, 44, 0, 130)
@@ -148,6 +153,9 @@ ToggleButton.Parent = ScreenGui
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 local didToggleDrag = MakeDraggable(ToggleButton)
 
+-- ==========================================
+-- PAINEL PRINCIPAL
+-- ==========================================
 local MainPanel = Instance.new("Frame")
 MainPanel.Name = "ChatMainPanel"
 MainPanel.Size = UDim2.new(0, 414, 0, 283)
@@ -172,7 +180,6 @@ ConfigButton.Parent = MainPanel
 
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
--- Subimos a posição Y para 6 (para colar no topo, alinhado com a engrenagem) e diminuímos a altura (1, -58)
 MessagesArea.Size = UDim2.new(1, -24, 1, -58)      
 MessagesArea.Position = UDim2.new(0, 12, 0, 6)    
 MessagesArea.BackgroundTransparency = 1
@@ -187,9 +194,9 @@ MessagesArea.Parent = MainPanel
 
 local MessagesLayout = Instance.new("UIListLayout")
 MessagesLayout.SortOrder = Enum.SortOrder.LayoutOrder
-MessagesLayout.Padding = UDim.new(0, 2)             -- Espaçamento bem juntinho
+MessagesLayout.Padding = UDim.new(0, 2)             
 MessagesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top -- Força tudo pro teto
+MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top 
 MessagesLayout.Parent = MessagesArea
 
 MessagesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -198,11 +205,14 @@ end)
 
 local MessagesPadding = Instance.new("UIPadding")
 MessagesPadding.PaddingLeft = UDim.new(0, 2)
-MessagesPadding.PaddingRight = UDim.new(0, 48) -- Recuo para a engrenagem
-MessagesPadding.PaddingTop = UDim.new(0, 0)    -- ZERADO PARA COLAR NO TOPO
+MessagesPadding.PaddingRight = UDim.new(0, 48) 
+MessagesPadding.PaddingTop = UDim.new(0, 0)    
 MessagesPadding.PaddingBottom = UDim.new(0, 0)
 MessagesPadding.Parent = MessagesArea
 
+-- ==========================================
+-- INPUT E RODAPÉ (PRIVATE MODE)
+-- ==========================================
 local InputContainer = Instance.new("Frame")
 InputContainer.Name = "InputContainer"
 InputContainer.Size = UDim2.new(1, -24, 0, 38)
@@ -213,9 +223,14 @@ InputContainer.BorderSizePixel = 0
 InputContainer.Parent = MainPanel
 Instance.new("UICorner", InputContainer).CornerRadius = UDim.new(0, 8)
 
+local InputStroke = Instance.new("UIStroke", InputContainer)
+InputStroke.Color = Color3.fromRGB(180, 130, 255) -- Roxo para indicar PV
+InputStroke.Thickness = 1
+InputStroke.Transparency = 1 -- Invisível por padrão
+
 local ChatInput = Instance.new("TextBox")
 ChatInput.Name = "ChatInput"
-ChatInput.Size = UDim2.new(1, -20, 1, 0)
+ChatInput.Size = UDim2.new(1, -45, 1, 0) -- Reduzi o tamanho para caber o botão X
 ChatInput.Position = UDim2.new(0, 12, 0, 0)
 ChatInput.BackgroundTransparency = 1
 ChatInput.Text = ""
@@ -228,8 +243,45 @@ ChatInput.TextXAlignment = Enum.TextXAlignment.Left
 ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
-local function ShowBubble(username, message)
+local ClearTargetBtn = Instance.new("TextButton")
+ClearTargetBtn.Name = "ClearTargetBtn"
+ClearTargetBtn.Size = UDim2.new(0, 24, 0, 24)
+ClearTargetBtn.Position = UDim2.new(1, -32, 0.5, -12)
+ClearTargetBtn.BackgroundTransparency = 1
+ClearTargetBtn.Text = "✕"
+ClearTargetBtn.TextColor3 = COLORS.SubText
+ClearTargetBtn.Font = Enum.Font.GothamBold
+ClearTargetBtn.TextSize = 16
+ClearTargetBtn.Visible = false
+ClearTargetBtn.ZIndex = 15
+ClearTargetBtn.Parent = InputContainer
+
+-- Função para atualizar o visual do input (Privado vs Global)
+local function UpdateInputUI()
+	if currentTarget then
+		ChatInput.PlaceholderText = "PRVT TO " .. currentTarget .. "..."
+		InputStroke.Transparency = 0.2 -- Mostra borda roxa
+		ClearTargetBtn.Visible = true
+		ClearTargetBtn.TextColor3 = COLORS.White
+	else
+		ChatInput.PlaceholderText = "Clique aqui para digitar..."
+		InputStroke.Transparency = 1 -- Esconde borda roxa
+		ClearTargetBtn.Visible = false
+	end
+end
+
+ClearTargetBtn.MouseButton1Click:Connect(function()
+	currentTarget = nil
+	UpdateInputUI()
+end)
+
+-- ==========================================
+-- BALÃO DE MENSAGEM NATIVO (ChatService)
+-- ==========================================
+local function ShowBubble(username, message, isPrivate, target)
 	if mutedPlayers[username] then return end
+	-- Se for PV, apenas o alvo e o remetente devem ver o balão
+	if isPrivate and (username ~= LocalPlayer.Name and target ~= LocalPlayer.Name) then return end
 
 	local plr = Players:FindFirstChild(username)
 	if not plr then return end
@@ -240,11 +292,17 @@ local function ShowBubble(username, message)
 	local head = char:FindFirstChild("Head")
 	if not head then return end
 
+	local displayMsg = message
+	if isPrivate then displayMsg = "[PV] " .. message end
+
 	pcall(function()
-		ChatService:Chat(head, message, Enum.ChatColor.White)
+		ChatService:Chat(head, displayMsg, Enum.ChatColor.White)
 	end)
 end
 
+-- ==========================================
+-- TOAST (NOTIFICAÇÃO)
+-- ==========================================
 local Toast = Instance.new("Frame")
 Toast.Name = "Toast"
 Toast.Size = UDim2.new(0.9, 0, 0, 40)
@@ -292,7 +350,10 @@ local function ShowToast(sender, msg)
 	end)
 end
 
-local function AppendMessage(senderName, displayName, text, isMe)
+-- ==========================================
+-- APPEND MESSAGE (COM CLIQUE PARA PV)
+-- ==========================================
+local function AppendMessage(senderName, displayName, text, isMe, isPrivate, target)
 	if mutedPlayers[senderName] and not isMe then return end
 
 	local MsgLabel = Instance.new("TextLabel")
@@ -312,10 +373,19 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	local safeMsg  = EscapeRichText(text)
 
 	local nameColor = isMe and "rgb(80,220,120)" or "rgb(50,160,255)"
+	local prefix = ""
+
+	if isPrivate then
+		if isMe then
+			prefix = string.format("<font color='rgb(255,105,180)'>[TO: %s]</font> ", EscapeRichText(target))
+		else
+			prefix = "<font color='rgb(255,105,180)'>[PV]</font> "
+		end
+	end
 
 	MsgLabel.Text = string.format(
-		"<font color='%s'>[%s]:</font> <font color='rgb(255,255,255)'>%s</font>",
-		nameColor, safeName, safeMsg
+		"%s<font color='%s'>[%s]:</font> <font color='rgb(255,255,255)'>%s</font>",
+		prefix, nameColor, safeName, safeMsg
 	)
 
 	local ClickDetector = Instance.new("TextButton")
@@ -336,6 +406,13 @@ local function AppendMessage(senderName, displayName, text, isMe)
 					MsgLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 				end
 			end)
+		else
+			-- Ativa modo privado se clicar e não for você mesmo
+			if senderName ~= LocalPlayer.Name then
+				currentTarget = senderName
+				UpdateInputUI()
+				ChatInput:CaptureFocus()
+			end
 		end
 	end)
 
@@ -349,6 +426,9 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	end)
 end
 
+-- ==========================================
+-- WEBSOCKET
+-- ==========================================
 local socket
 local running = true
 
@@ -365,16 +445,23 @@ local function ConnectWS()
 			local ok2, data = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not (ok2 and data and data.message) then return end
 
+			-- Se for de outro servidor, ignora
 			if data.serverId ~= CURRENT_SERVER_ID then return end
 
 			local isMe = (data.username == LocalPlayer.Name)
+			local isPrivate = (data.target ~= nil and data.target ~= "")
+
+			-- Se for privada, verifica se você é o alvo ou o remetente
+			if isPrivate then
+				if not isMe and data.target ~= LocalPlayer.Name then return end
+			end
 
 			if not isMe and IsDuplicate(data.username, data.message) then return end
 			if mutedPlayers[data.username] and not isMe then return end
 
 			if not isMe then
-				AppendMessage(data.username, data.nickname or data.username, data.message, false)
-				ShowBubble(data.username, data.message)
+				AppendMessage(data.username, data.nickname or data.username, data.message, false, isPrivate, data.target)
+				ShowBubble(data.username, data.message, isPrivate, data.target)
 
 				if not MainPanel.Visible and ChatSettings.Notifications then
 					NotificationSound:Play()
@@ -395,6 +482,9 @@ local function ConnectWS()
 	end
 end
 
+-- ==========================================
+-- ENVIAR MENSAGEM (GLOBAL OU PV)
+-- ==========================================
 local function SendMessage()
 	local content = ChatInput.Text
 	if content:match("^%s*$") then return end
@@ -406,13 +496,15 @@ local function SendMessage()
 		username = LocalPlayer.Name,
 		nickname = LocalPlayer.DisplayName,
 		message  = content,
-		serverId = CURRENT_SERVER_ID
+		serverId = CURRENT_SERVER_ID,
+		target   = currentTarget -- Envia o alvo se houver
 	}
 	pcall(function() socket:Send(HttpService:JSONEncode(payload)) end)
 
-	-- Renderiza localmente IMEDIATAMENTE (feedback instantâneo)
-	AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true)
-	ShowBubble(LocalPlayer.Name, content)
+	-- Renderiza localmente IMEDIATAMENTE
+	local isPrivate = (currentTarget ~= nil)
+	AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true, isPrivate, currentTarget)
+	ShowBubble(LocalPlayer.Name, content, isPrivate, currentTarget)
 end
 
 ChatInput.FocusLost:Connect(function(enterPressed)
@@ -421,6 +513,9 @@ ChatInput.FocusLost:Connect(function(enterPressed)
 	end
 end)
 
+-- ==========================================
+-- CONFIGURAÇÃO
+-- ==========================================
 local ConfigPanel = Instance.new("Frame")
 ConfigPanel.Name = "ConfigPanel"
 ConfigPanel.Size = UDim2.new(1, -36, 1, -110)
