@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
+local ChatService = game:GetService("Chat") -- [NOVO] Balão nativo
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -176,11 +177,12 @@ ConfigButton.ScaleType = Enum.ScaleType.Fit
 ConfigButton.ZIndex = 15
 ConfigButton.Parent = MainPanel
 
--- [AJUSTE] Área de mensagens puxada para cima, mas com recuo na direita para não bater na engrenagem
+-- [FIX LAYOUT] Área de mensagens começa abaixo do botão Config
+-- PaddingLeft interno no ScrollingFrame compensa o recuo da esquerda
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
-MessagesArea.Size = UDim2.new(1, -60, 1, -85) -- Recuo de 60px na direita para fugir do botão Config
-MessagesArea.Position = UDim2.new(0, 12, 0, 38) -- Subiu de 48 para 38
+MessagesArea.Size = UDim2.new(1, -24, 1, -94)      -- largura total menos margem simétrica
+MessagesArea.Position = UDim2.new(0, 12, 0, 46)    -- começa EXATAMENTE abaixo do ConfigButton (8+32=40, +6 de respiro)
 MessagesArea.BackgroundTransparency = 1
 MessagesArea.BorderSizePixel = 0
 MessagesArea.ScrollBarThickness = 4
@@ -188,11 +190,22 @@ MessagesArea.ScrollBarImageColor3 = COLORS.White
 MessagesArea.ScrollBarImageTransparency = 0.4
 MessagesArea.CanvasSize = UDim2.new(0, 0, 0, 0)
 MessagesArea.AutomaticCanvasSize = Enum.AutomaticSize.Y
+MessagesArea.ClipsDescendants = true
+MessagesArea.ScrollingDirection = Enum.ScrollingDirection.Y
 MessagesArea.Parent = MainPanel
+
+-- Padding interno: 8px laterais + 48px de recuo à direita (área do ConfigButton)
+local MessagesPadding = Instance.new("UIPadding")
+MessagesPadding.PaddingLeft = UDim.new(0, 4)
+MessagesPadding.PaddingRight = UDim.new(0, 48) -- reserva horizontal pro botão Config
+MessagesPadding.PaddingTop = UDim.new(0, 0)    -- [FIX] sem espaço no topo
+MessagesPadding.PaddingBottom = UDim.new(0, 4)
+MessagesPadding.Parent = MessagesArea
 
 local MessagesLayout = Instance.new("UIListLayout")
 MessagesLayout.SortOrder = Enum.SortOrder.LayoutOrder
-MessagesLayout.Padding = UDim.new(0, 6)
+MessagesLayout.Padding = UDim.new(0, 4)             -- [FIX] espaçamento compacto entre mensagens
+MessagesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 MessagesLayout.Parent = MessagesArea
 
@@ -222,62 +235,22 @@ ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
 -- ==========================================
--- BALÃO DE MENSAGEM CUSTOMIZADO
+-- [NOVO] BALÃO DE MENSAGEM NATIVO (ChatService)
 -- ==========================================
-local activeBubbles = {}
-
 local function ShowBubble(username, message)
+	if mutedPlayers[username] then return end
+
 	local plr = Players:FindFirstChild(username)
-	if not plr or not plr.Character then return end
-	
-	local head = plr.Character:FindFirstChild("Head")
+	if not plr then return end
+
+	local char = plr.Character
+	if not char then return end
+
+	local head = char:FindFirstChild("Head")
 	if not head then return end
 
-	if activeBubbles[username] then
-		activeBubbles[username]:Destroy()
-	end
-
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "CustomChatBubble"
-	billboard.Adornee = head
-	billboard.Size = UDim2.new(0, 250, 0, 80)
-	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = head
-	activeBubbles[username] = billboard
-
-	local bg = Instance.new("Frame")
-	bg.Size = UDim2.new(1, 0, 1, 0)
-	bg.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-	bg.BackgroundTransparency = 0.2
-	bg.BorderSizePixel = 0
-	bg.Parent = billboard
-
-	local corner = Instance.new("UICorner", bg)
-	corner.CornerRadius = UDim.new(0, 8)
-
-	local padding = Instance.new("UIPadding", bg)
-	padding.PaddingTop = UDim.new(0, 8)
-	padding.PaddingBottom = UDim.new(0, 8)
-	padding.PaddingLeft = UDim.new(0, 12)
-	padding.PaddingRight = UDim.new(0, 12)
-
-	local text = Instance.new("TextLabel")
-	text.Size = UDim2.new(1, 0, 1, 0)
-	text.BackgroundTransparency = 1
-	text.Text = message
-	text.TextColor3 = Color3.fromRGB(255, 255, 255)
-	text.Font = Enum.Font.GothamMedium
-	text.TextSize = 14
-	text.TextWrapped = true
-	text.TextXAlignment = Enum.TextXAlignment.Left
-	text.Parent = bg
-
-	task.delay(5, function()
-		if billboard and billboard.Parent then
-			billboard:Destroy()
-			activeBubbles[username] = nil
-		end
+	pcall(function()
+		ChatService:Chat(head, message, Enum.ChatColor.White)
 	end)
 end
 
@@ -332,19 +305,19 @@ local function ShowToast(sender, msg)
 end
 
 -- ==========================================
--- APPEND MESSAGE (Fonte maior)
+-- APPEND MESSAGE
 -- ==========================================
 local function AppendMessage(senderName, displayName, text, isMe)
 	if mutedPlayers[senderName] and not isMe then return end
 
 	local MsgLabel = Instance.new("TextLabel")
-	MsgLabel.Size = UDim2.new(1, -8, 0, 0)
+	MsgLabel.Size = UDim2.new(1, 0, 0, 0)                -- [FIX] sem offset lateral (padding cuida disso)
 	MsgLabel.AutomaticSize = Enum.AutomaticSize.Y
-	MsgLabel.BackgroundTransparency = 1 
+	MsgLabel.BackgroundTransparency = 1
 	MsgLabel.BorderSizePixel = 0
 	MsgLabel.RichText = true
 	MsgLabel.Font = Enum.Font.GothamMedium
-	MsgLabel.TextSize = 16 -- [AJUSTE] Fonte maior (antes era 14)
+	MsgLabel.TextSize = 16
 	MsgLabel.TextWrapped = true
 	MsgLabel.TextXAlignment = Enum.TextXAlignment.Left
 	MsgLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -352,15 +325,17 @@ local function AppendMessage(senderName, displayName, text, isMe)
 
 	local safeName = EscapeRichText(displayName or senderName)
 	local safeMsg  = EscapeRichText(text)
-	
+
+	local nameColor = isMe and "rgb(80,220,120)" or "rgb(50,160,255)"
+
 	MsgLabel.Text = string.format(
-		"<font color='rgb(50,160,255)'>[%s]:</font> <font color='rgb(255,255,255)'>%s</font>",
-		safeName, safeMsg
+		"<font color='%s'>[%s]:</font> <font color='rgb(255,255,255)'>%s</font>",
+		nameColor, safeName, safeMsg
 	)
 
 	local Padding = Instance.new("UIPadding", MsgLabel)
-	Padding.PaddingTop = UDim.new(0, 2)
-	Padding.PaddingBottom = UDim.new(0, 2)
+	Padding.PaddingTop = UDim.new(0, 1)
+	Padding.PaddingBottom = UDim.new(0, 1)
 
 	local ClickDetector = Instance.new("TextButton")
 	ClickDetector.Size = UDim2.new(1, 0, 1, 0)
@@ -373,12 +348,12 @@ local function AppendMessage(senderName, displayName, text, isMe)
 		if ChatSettings.CopyText then
 			if setclipboard then setclipboard(text)
 			elseif toclipboard then toclipboard(text) end
-			
+
 			MsgLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-			task.delay(0.2, function() 
-				if MsgLabel and MsgLabel.Parent then 
-					MsgLabel.TextColor3 = Color3.fromRGB(255, 255, 255) 
-				end 
+			task.delay(0.2, function()
+				if MsgLabel and MsgLabel.Parent then
+					MsgLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				end
 			end)
 		end
 	end)
@@ -386,8 +361,11 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	if not messagesByUser[senderName] then messagesByUser[senderName] = {} end
 	table.insert(messagesByUser[senderName], MsgLabel)
 
+	-- [FIX] Scroll suave para o fim (defer para o layout recalcular)
 	task.defer(function()
-		MessagesArea.CanvasPosition = Vector2.new(0, MessagesArea.AbsoluteCanvasSize.Y)
+		if MessagesArea and MessagesArea.Parent then
+			MessagesArea.CanvasPosition = Vector2.new(0, MessagesArea.AbsoluteCanvasSize.Y)
+		end
 	end)
 end
 
@@ -414,16 +392,21 @@ local function ConnectWS()
 
 			local isMe = (data.username == LocalPlayer.Name)
 
-			if IsDuplicate(data.username, data.message) then return end
+			-- [FIX] Dedup só para mensagens de OUTROS players
+			-- Sua própria mensagem já foi renderizada localmente em SendMessage
+			if not isMe and IsDuplicate(data.username, data.message) then return end
 
 			if mutedPlayers[data.username] and not isMe then return end
 
-			AppendMessage(data.username, data.nickname or data.username, data.message, isMe)
-			ShowBubble(data.username, data.message)
+			-- [FIX] Só renderiza via WS se NÃO for você (evita duplicar no eco do servidor)
+			if not isMe then
+				AppendMessage(data.username, data.nickname or data.username, data.message, false)
+				ShowBubble(data.username, data.message)
 
-			if not isMe and not MainPanel.Visible and ChatSettings.Notifications then
-				NotificationSound:Play()
-				ShowToast(data.nickname or data.username, data.message)
+				if not MainPanel.Visible and ChatSettings.Notifications then
+					NotificationSound:Play()
+					ShowToast(data.nickname or data.username, data.message)
+				end
 			end
 		end)
 
@@ -449,7 +432,8 @@ local function SendMessage()
 
 	ChatInput.Text = ""
 
-	IsDuplicate(LocalPlayer.Name, content)
+	-- [FIX] NÃO marca como duplicada localmente — quem marca é o IsDuplicate do WS
+	-- mas como bloqueamos o eco de isMe, não há risco de duplicar
 
 	local payload = {
 		username = LocalPlayer.Name,
@@ -459,14 +443,15 @@ local function SendMessage()
 	}
 	pcall(function() socket:Send(HttpService:JSONEncode(payload)) end)
 
+	-- Renderiza localmente IMEDIATAMENTE (feedback instantâneo)
 	AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true)
 	ShowBubble(LocalPlayer.Name, content)
 end
 
-ChatInput.FocusLost:Connect(function(enterPressed) 
-	if enterPressed then 
-		SendMessage() 
-	end 
+ChatInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed then
+		SendMessage()
+	end
 end)
 
 -- ==========================================
