@@ -25,7 +25,8 @@ local COLORS = {
 	ToggleOffBg = Color3.fromRGB(58, 58, 58),
 	ToggleOnBg = Color3.fromRGB(220, 220, 220),
 	ToggleKnobOff = Color3.fromRGB(255, 255, 255),
-	ToggleKnobOn = Color3.fromRGB(20, 20, 20)
+	ToggleKnobOn = Color3.fromRGB(20, 20, 20),
+	PrivatePink = Color3.fromRGB(255, 100, 200)
 }
 
 local ICONS = {
@@ -35,7 +36,7 @@ local ICONS = {
 	Bell = "rbxassetid://106054450773402",
 	CopyText = "rbxassetid://89696314837335",
 	Freeze = "rbxassetid://121256149182197",
-	CloseX = "rbxassetid://11432556030" -- Ícone de X para limpar target
+	ClosePV = "rbxassetid://94498250014385" -- ID do Botão X atualizado
 }
 
 local ChatSettings = {
@@ -46,7 +47,9 @@ local ChatSettings = {
 
 local mutedPlayers = {}
 local messagesByUser = {}
-local currentTarget = nil -- Guarda o nome do jogador para quem estamos mandando PV
+local currentPrivateTarget = nil
+local lastMessageTime = 0 -- Variável para o Cooldown
+local COOLDOWN_TIME = 5     -- Tempo de recarga em segundos
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrivateChatUI"
@@ -178,6 +181,9 @@ ConfigButton.ScaleType = Enum.ScaleType.Fit
 ConfigButton.ZIndex = 15
 ConfigButton.Parent = MainPanel
 
+-- ==========================================
+-- ÁREA DE MENSAGENS
+-- ==========================================
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
 MessagesArea.Size = UDim2.new(1, -24, 1, -58)      
@@ -211,7 +217,7 @@ MessagesPadding.PaddingBottom = UDim.new(0, 0)
 MessagesPadding.Parent = MessagesArea
 
 -- ==========================================
--- INPUT E RODAPÉ (PRIVATE MODE)
+-- INPUT CONTAINER E BOTÃO DE CANCELAR PV
 -- ==========================================
 local InputContainer = Instance.new("Frame")
 InputContainer.Name = "InputContainer"
@@ -223,14 +229,9 @@ InputContainer.BorderSizePixel = 0
 InputContainer.Parent = MainPanel
 Instance.new("UICorner", InputContainer).CornerRadius = UDim.new(0, 8)
 
-local InputStroke = Instance.new("UIStroke", InputContainer)
-InputStroke.Color = Color3.fromRGB(180, 130, 255) -- Roxo para indicar PV
-InputStroke.Thickness = 1
-InputStroke.Transparency = 1 -- Invisível por padrão
-
 local ChatInput = Instance.new("TextBox")
 ChatInput.Name = "ChatInput"
-ChatInput.Size = UDim2.new(1, -45, 1, 0) -- Reduzi o tamanho para caber o botão X
+ChatInput.Size = UDim2.new(1, -40, 1, 0) 
 ChatInput.Position = UDim2.new(0, 12, 0, 0)
 ChatInput.BackgroundTransparency = 1
 ChatInput.Text = ""
@@ -243,45 +244,23 @@ ChatInput.TextXAlignment = Enum.TextXAlignment.Left
 ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
-local ClearTargetBtn = Instance.new("TextButton")
-ClearTargetBtn.Name = "ClearTargetBtn"
-ClearTargetBtn.Size = UDim2.new(0, 24, 0, 24)
-ClearTargetBtn.Position = UDim2.new(1, -32, 0.5, -12)
-ClearTargetBtn.BackgroundTransparency = 1
-ClearTargetBtn.Text = "✕"
-ClearTargetBtn.TextColor3 = COLORS.SubText
-ClearTargetBtn.Font = Enum.Font.GothamBold
-ClearTargetBtn.TextSize = 16
-ClearTargetBtn.Visible = false
-ClearTargetBtn.ZIndex = 15
-ClearTargetBtn.Parent = InputContainer
-
--- Função para atualizar o visual do input (Privado vs Global)
-local function UpdateInputUI()
-	if currentTarget then
-		ChatInput.PlaceholderText = "PRVT TO " .. currentTarget .. "..."
-		InputStroke.Transparency = 0.2 -- Mostra borda roxa
-		ClearTargetBtn.Visible = true
-		ClearTargetBtn.TextColor3 = COLORS.White
-	else
-		ChatInput.PlaceholderText = "Clique aqui para digitar..."
-		InputStroke.Transparency = 1 -- Esconde borda roxa
-		ClearTargetBtn.Visible = false
-	end
-end
-
-ClearTargetBtn.MouseButton1Click:Connect(function()
-	currentTarget = nil
-	UpdateInputUI()
-end)
+-- Botão "X" (Usando o novo ID)
+local CancelPrivateBtn = Instance.new("ImageButton")
+CancelPrivateBtn.Name = "CancelPrivateBtn"
+CancelPrivateBtn.Size = UDim2.new(0, 20, 0, 20)
+CancelPrivateBtn.Position = UDim2.new(1, -30, 0.5, -10)
+CancelPrivateBtn.BackgroundTransparency = 1
+CancelPrivateBtn.Image = ICONS.ClosePV
+CancelPrivateBtn.ImageColor3 = COLORS.SubText
+CancelPrivateBtn.Visible = false
+CancelPrivateBtn.ZIndex = 10
+CancelPrivateBtn.Parent = InputContainer
 
 -- ==========================================
 -- BALÃO DE MENSAGEM NATIVO (ChatService)
 -- ==========================================
-local function ShowBubble(username, message, isPrivate, target)
+local function ShowBubble(username, message)
 	if mutedPlayers[username] then return end
-	-- Se for PV, apenas o alvo e o remetente devem ver o balão
-	if isPrivate and (username ~= LocalPlayer.Name and target ~= LocalPlayer.Name) then return end
 
 	local plr = Players:FindFirstChild(username)
 	if not plr then return end
@@ -292,11 +271,8 @@ local function ShowBubble(username, message, isPrivate, target)
 	local head = char:FindFirstChild("Head")
 	if not head then return end
 
-	local displayMsg = message
-	if isPrivate then displayMsg = "[PV] " .. message end
-
 	pcall(function()
-		ChatService:Chat(head, displayMsg, Enum.ChatColor.White)
+		ChatService:Chat(head, message, Enum.ChatColor.White)
 	end)
 end
 
@@ -351,9 +327,29 @@ local function ShowToast(sender, msg)
 end
 
 -- ==========================================
--- APPEND MESSAGE (COM CLIQUE PARA PV)
+-- SISTEMA DE MENSAGEM PRIVADA
 -- ==========================================
-local function AppendMessage(senderName, displayName, text, isMe, isPrivate, target)
+local function SetPrivateTarget(targetName)
+	currentPrivateTarget = targetName
+	if targetName then
+		ChatInput.PlaceholderText = "PRVT TO " .. targetName .. "..."
+		ChatInput.PlaceholderColor3 = COLORS.PrivatePink
+		CancelPrivateBtn.Visible = true
+	else
+		ChatInput.PlaceholderText = "Clique aqui para digitar..."
+		ChatInput.PlaceholderColor3 = COLORS.SubText
+		CancelPrivateBtn.Visible = false
+	end
+end
+
+CancelPrivateBtn.MouseButton1Click:Connect(function()
+	SetPrivateTarget(nil)
+end)
+
+-- ==========================================
+-- APPEND MESSAGE
+-- ==========================================
+local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
 	if mutedPlayers[senderName] and not isMe then return end
 
 	local MsgLabel = Instance.new("TextLabel")
@@ -374,12 +370,12 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate, tar
 
 	local nameColor = isMe and "rgb(80,220,120)" or "rgb(50,160,255)"
 	local prefix = ""
-
+	
 	if isPrivate then
 		if isMe then
-			prefix = string.format("<font color='rgb(255,105,180)'>[TO: %s]</font> ", EscapeRichText(target))
+			prefix = string.format("<font color='rgb(255,100,200)'>[TO: %s]</font> ", safeName)
 		else
-			prefix = "<font color='rgb(255,105,180)'>[PV]</font> "
+			prefix = "<font color='rgb(255,100,200)'>[PV]</font> "
 		end
 	end
 
@@ -396,6 +392,8 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate, tar
 	ClickDetector.Parent = MsgLabel
 
 	ClickDetector.MouseButton1Click:Connect(function()
+		if isMe and not isPrivate then return end
+
 		if ChatSettings.CopyText then
 			if setclipboard then setclipboard(text)
 			elseif toclipboard then toclipboard(text) end
@@ -407,11 +405,8 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate, tar
 				end
 			end)
 		else
-			-- Ativa modo privado se clicar e não for você mesmo
-			if senderName ~= LocalPlayer.Name then
-				currentTarget = senderName
-				UpdateInputUI()
-				ChatInput:CaptureFocus()
+			if not isMe then
+				SetPrivateTarget(senderName)
 			end
 		end
 	end)
@@ -445,23 +440,20 @@ local function ConnectWS()
 			local ok2, data = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not (ok2 and data and data.message) then return end
 
-			-- Se for de outro servidor, ignora
 			if data.serverId ~= CURRENT_SERVER_ID then return end
 
 			local isMe = (data.username == LocalPlayer.Name)
+			local isTargetingMe = (data.target == LocalPlayer.Name)
 			local isPrivate = (data.target ~= nil and data.target ~= "")
 
-			-- Se for privada, verifica se você é o alvo ou o remetente
-			if isPrivate then
-				if not isMe and data.target ~= LocalPlayer.Name then return end
-			end
+			if isPrivate and not isTargetingMe and not isMe then return end
 
 			if not isMe and IsDuplicate(data.username, data.message) then return end
 			if mutedPlayers[data.username] and not isMe then return end
 
 			if not isMe then
-				AppendMessage(data.username, data.nickname or data.username, data.message, false, isPrivate, data.target)
-				ShowBubble(data.username, data.message, isPrivate, data.target)
+				AppendMessage(data.username, data.nickname or data.username, data.message, false, isPrivate)
+				ShowBubble(data.username, data.message)
 
 				if not MainPanel.Visible and ChatSettings.Notifications then
 					NotificationSound:Play()
@@ -483,13 +475,40 @@ local function ConnectWS()
 end
 
 -- ==========================================
--- ENVIAR MENSAGEM (GLOBAL OU PV)
+-- ENVIAR MENSAGEM (COM COOLDOWN E COMANDO /CLEAR)
 -- ==========================================
 local function SendMessage()
 	local content = ChatInput.Text
+	
+	-- Verifica se está vazio
 	if content:match("^%s*$") then return end
+
+	-- Comando /Clear (Limpa o chat localmente)
+	if string.lower(content) == "/clear" then
+		for _, child in ipairs(MessagesArea:GetChildren()) do
+			if child:IsA("TextLabel") then
+				child:Destroy()
+			end
+		end
+		ChatInput.Text = ""
+		return
+	end
+
+	-- Sistema de Cooldown (5 segundos)
+	local currentTime = os.clock()
+	if currentTime - lastMessageTime < COOLDOWN_TIME then
+		-- Feedback visual piscando vermelho
+		ChatInput.TextColor3 = Color3.fromRGB(255, 100, 100)
+		task.delay(0.3, function()
+			if ChatInput then ChatInput.TextColor3 = COLORS.White end
+		end)
+		return
+	end
+
 	if not socket then warn("[PrivateChat] Sem conexão."); return end
 
+	-- Registra o tempo do envio
+	lastMessageTime = currentTime
 	ChatInput.Text = ""
 
 	local payload = {
@@ -497,14 +516,12 @@ local function SendMessage()
 		nickname = LocalPlayer.DisplayName,
 		message  = content,
 		serverId = CURRENT_SERVER_ID,
-		target   = currentTarget -- Envia o alvo se houver
+		target   = currentPrivateTarget
 	}
 	pcall(function() socket:Send(HttpService:JSONEncode(payload)) end)
 
-	-- Renderiza localmente IMEDIATAMENTE
-	local isPrivate = (currentTarget ~= nil)
-	AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true, isPrivate, currentTarget)
-	ShowBubble(LocalPlayer.Name, content, isPrivate, currentTarget)
+	AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true, currentPrivateTarget ~= nil)
+	ShowBubble(LocalPlayer.Name, content)
 end
 
 ChatInput.FocusLost:Connect(function(enterPressed)
@@ -552,7 +569,7 @@ local HeaderTitle = Instance.new("TextLabel")
 HeaderTitle.Size = UDim2.new(1, -60, 1, 0)
 HeaderTitle.Position = UDim2.new(0, 56, 0, 0)
 HeaderTitle.BackgroundTransparency = 1
-HeaderTitle.Text = "PAINEL DO CHAT"
+HeaderTitle.Text = "PAINEL DO SCRIPT"
 HeaderTitle.TextColor3 = COLORS.White
 HeaderTitle.Font = Enum.Font.Arcade
 HeaderTitle.TextSize = 16
@@ -715,17 +732,17 @@ CloseActionBtn.MouseButton1Click:Connect(function()
 	ScreenGui:Destroy()
 end)
 
-local NotifRow = CreateOptionRow(2, ICONS.Bell, "NOTIFICATION", "Ative ou desative as notificações.", true)
+local NotifRow = CreateOptionRow(2, ICONS.Bell, "Notificações", "Ative ou desative as notificações.", true)
 AddToggleControl(NotifRow, ChatSettings.Notifications, function(isEnabled)
 	ChatSettings.Notifications = isEnabled
 end)
 
-local CopyRow = CreateOptionRow(3, ICONS.CopyText, "COPY TEXT", "Permite copiar textos e mensagens.", true)
+local CopyRow = CreateOptionRow(3, ICONS.CopyText, "Copiar Textos", "Permite copiar textos e mensagens.", true)
 AddToggleControl(CopyRow, ChatSettings.CopyText, function(isEnabled)
 	ChatSettings.CopyText = isEnabled
 end)
 
-local FreezeRow = CreateOptionRow(4, ICONS.Freeze, "FREEZE", "Trava o arraste da interface e do botão externo.", false)
+local FreezeRow = CreateOptionRow(4, ICONS.Freeze, "Frizar", "Trava o arraste da interface e do botão externo.", false)
 AddToggleControl(FreezeRow, ChatSettings.FreezeChat, function(isEnabled)
 	ChatSettings.FreezeChat = isEnabled
 end)
