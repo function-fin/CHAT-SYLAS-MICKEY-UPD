@@ -7,7 +7,7 @@ local ChatService = game:GetService("Chat")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
-local WS_URL = "wss://free.blr2.piesocket.com/v3/1?api_key=iwYCQEyErMVj5txmeTDuzQ0Sle6V7tcAuOvlZQZp&notify_self=1"
+local WS_URL = "wss://free.blr2.piesocket.com/v3/1?api_key=nJwrvMLQ39lJLpcxH88UbwiV08uXKrqSV7zvC1Z4&notify_self=1"
 local CURRENT_SERVER_ID = (game.JobId ~= "" and game.JobId) or "STUDIO_SERVER"
 local SOUND_ID = "rbxassetid://1293433423"
 
