@@ -130,9 +130,6 @@ local function MakeDraggable(guiObject, dragHandle)
 	return function() return hasMoved end
 end
 
--- ==========================================
--- BOTÃO LATERAL
--- ==========================================
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Name = "ChatToggleButton"
 ToggleButton.Size = UDim2.new(0, 44, 0, 130)
@@ -151,9 +148,6 @@ ToggleButton.Parent = ScreenGui
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 local didToggleDrag = MakeDraggable(ToggleButton)
 
--- ==========================================
--- PAINEL PRINCIPAL
--- ==========================================
 local MainPanel = Instance.new("Frame")
 MainPanel.Name = "ChatMainPanel"
 MainPanel.Size = UDim2.new(0, 414, 0, 283)
@@ -176,9 +170,6 @@ ConfigButton.ScaleType = Enum.ScaleType.Fit
 ConfigButton.ZIndex = 15
 ConfigButton.Parent = MainPanel
 
--- ==========================================
--- ÁREA DE MENSAGENS (TOTALMENTE AJUSTADA AO TOPO)
--- ==========================================
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
 -- Subimos a posição Y para 6 (para colar no topo, alinhado com a engrenagem) e diminuímos a altura (1, -58)
@@ -194,7 +185,6 @@ MessagesArea.ClipsDescendants = true
 MessagesArea.ScrollingDirection = Enum.ScrollingDirection.Y
 MessagesArea.Parent = MainPanel
 
--- O segredo está aqui: UIListLayout no topo e sem UIPadding superior!
 local MessagesLayout = Instance.new("UIListLayout")
 MessagesLayout.SortOrder = Enum.SortOrder.LayoutOrder
 MessagesLayout.Padding = UDim.new(0, 2)             -- Espaçamento bem juntinho
@@ -202,12 +192,10 @@ MessagesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top -- Força tudo pro teto
 MessagesLayout.Parent = MessagesArea
 
--- Atualiza o CanvasSize dinamicamente para evitar a barra de rolagem "infinita"
 MessagesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	MessagesArea.CanvasSize = UDim2.new(0, 0, 0, MessagesLayout.AbsoluteContentSize.Y)
 end)
 
--- Único padding presente é o da DIREITA para não bater no botão Config (deixei o topo 100% zerado)
 local MessagesPadding = Instance.new("UIPadding")
 MessagesPadding.PaddingLeft = UDim.new(0, 2)
 MessagesPadding.PaddingRight = UDim.new(0, 48) -- Recuo para a engrenagem
@@ -240,9 +228,6 @@ ChatInput.TextXAlignment = Enum.TextXAlignment.Left
 ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
--- ==========================================
--- BALÃO DE MENSAGEM NATIVO (ChatService)
--- ==========================================
 local function ShowBubble(username, message)
 	if mutedPlayers[username] then return end
 
@@ -260,9 +245,6 @@ local function ShowBubble(username, message)
 	end)
 end
 
--- ==========================================
--- TOAST (NOTIFICAÇÃO)
--- ==========================================
 local Toast = Instance.new("Frame")
 Toast.Name = "Toast"
 Toast.Size = UDim2.new(0.9, 0, 0, 40)
@@ -310,9 +292,6 @@ local function ShowToast(sender, msg)
 	end)
 end
 
--- ==========================================
--- APPEND MESSAGE
--- ==========================================
 local function AppendMessage(senderName, displayName, text, isMe)
 	if mutedPlayers[senderName] and not isMe then return end
 
@@ -363,7 +342,6 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	if not messagesByUser[senderName] then messagesByUser[senderName] = {} end
 	table.insert(messagesByUser[senderName], MsgLabel)
 
-	-- Rolagem suave para o fim
 	task.defer(function()
 		if MessagesArea and MessagesArea.Parent then
 			MessagesArea.CanvasPosition = Vector2.new(0, MessagesArea.AbsoluteCanvasSize.Y)
@@ -371,9 +349,6 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	end)
 end
 
--- ==========================================
--- WEBSOCKET
--- ==========================================
 local socket
 local running = true
 
@@ -420,9 +395,6 @@ local function ConnectWS()
 	end
 end
 
--- ==========================================
--- ENVIAR MENSAGEM
--- ==========================================
 local function SendMessage()
 	local content = ChatInput.Text
 	if content:match("^%s*$") then return end
@@ -449,9 +421,6 @@ ChatInput.FocusLost:Connect(function(enterPressed)
 	end
 end)
 
--- ==========================================
--- CONFIGURAÇÃO
--- ==========================================
 local ConfigPanel = Instance.new("Frame")
 ConfigPanel.Name = "ConfigPanel"
 ConfigPanel.Size = UDim2.new(1, -36, 1, -110)
@@ -488,7 +457,7 @@ local HeaderTitle = Instance.new("TextLabel")
 HeaderTitle.Size = UDim2.new(1, -60, 1, 0)
 HeaderTitle.Position = UDim2.new(0, 56, 0, 0)
 HeaderTitle.BackgroundTransparency = 1
-HeaderTitle.Text = "PAINEL DO SCRIPT"
+HeaderTitle.Text = "PAINEL DO CHAT"
 HeaderTitle.TextColor3 = COLORS.White
 HeaderTitle.Font = Enum.Font.Arcade
 HeaderTitle.TextSize = 16
@@ -651,17 +620,17 @@ CloseActionBtn.MouseButton1Click:Connect(function()
 	ScreenGui:Destroy()
 end)
 
-local NotifRow = CreateOptionRow(2, ICONS.Bell, "Notificações", "Ative ou desative as notificações.", true)
+local NotifRow = CreateOptionRow(2, ICONS.Bell, "NOTIFICATION", "Ative ou desative as notificações.", true)
 AddToggleControl(NotifRow, ChatSettings.Notifications, function(isEnabled)
 	ChatSettings.Notifications = isEnabled
 end)
 
-local CopyRow = CreateOptionRow(3, ICONS.CopyText, "Copiar Textos", "Permite copiar textos e mensagens.", true)
+local CopyRow = CreateOptionRow(3, ICONS.CopyText, "COPY TEXT", "Permite copiar textos e mensagens.", true)
 AddToggleControl(CopyRow, ChatSettings.CopyText, function(isEnabled)
 	ChatSettings.CopyText = isEnabled
 end)
 
-local FreezeRow = CreateOptionRow(4, ICONS.Freeze, "Frizar", "Trava o arraste da interface e do botão externo.", false)
+local FreezeRow = CreateOptionRow(4, ICONS.Freeze, "FREEZE", "Trava o arraste da interface e do botão externo.", false)
 AddToggleControl(FreezeRow, ChatSettings.FreezeChat, function(isEnabled)
 	ChatSettings.FreezeChat = isEnabled
 end)
