@@ -177,36 +177,43 @@ ConfigButton.ZIndex = 15
 ConfigButton.Parent = MainPanel
 
 -- ==========================================
--- ÁREA DE MENSAGENS (CORRIGIDA)
+-- ÁREA DE MENSAGENS (TOTALMENTE AJUSTADA AO TOPO)
 -- ==========================================
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
-MessagesArea.Size = UDim2.new(1, -24, 1, -94)      
-MessagesArea.Position = UDim2.new(0, 12, 0, 46)    
+-- Subimos a posição Y para 6 (para colar no topo, alinhado com a engrenagem) e diminuímos a altura (1, -58)
+MessagesArea.Size = UDim2.new(1, -24, 1, -58)      
+MessagesArea.Position = UDim2.new(0, 12, 0, 6)    
 MessagesArea.BackgroundTransparency = 1
 MessagesArea.BorderSizePixel = 0
 MessagesArea.ScrollBarThickness = 4
 MessagesArea.ScrollBarImageColor3 = COLORS.White
 MessagesArea.ScrollBarImageTransparency = 0.4
 MessagesArea.CanvasSize = UDim2.new(0, 0, 0, 0)
-MessagesArea.AutomaticCanvasSize = Enum.AutomaticSize.Y
 MessagesArea.ClipsDescendants = true
 MessagesArea.ScrollingDirection = Enum.ScrollingDirection.Y
 MessagesArea.Parent = MainPanel
 
-local MessagesPadding = Instance.new("UIPadding")
-MessagesPadding.PaddingLeft = UDim.new(0, 4)
-MessagesPadding.PaddingRight = UDim.new(0, 48) 
-MessagesPadding.PaddingTop = UDim.new(0, 2)    -- Dá um leve respiro no topo, mas não empurra para baixo
-MessagesPadding.PaddingBottom = UDim.new(0, 4)
-MessagesPadding.Parent = MessagesArea
-
+-- O segredo está aqui: UIListLayout no topo e sem UIPadding superior!
 local MessagesLayout = Instance.new("UIListLayout")
 MessagesLayout.SortOrder = Enum.SortOrder.LayoutOrder
-MessagesLayout.Padding = UDim.new(0, 2)             -- Espaçamento bem reduzido entre mensagens
+MessagesLayout.Padding = UDim.new(0, 2)             -- Espaçamento bem juntinho
 MessagesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top -- Força tudo pro teto
 MessagesLayout.Parent = MessagesArea
+
+-- Atualiza o CanvasSize dinamicamente para evitar a barra de rolagem "infinita"
+MessagesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	MessagesArea.CanvasSize = UDim2.new(0, 0, 0, MessagesLayout.AbsoluteContentSize.Y)
+end)
+
+-- Único padding presente é o da DIREITA para não bater no botão Config (deixei o topo 100% zerado)
+local MessagesPadding = Instance.new("UIPadding")
+MessagesPadding.PaddingLeft = UDim.new(0, 2)
+MessagesPadding.PaddingRight = UDim.new(0, 48) -- Recuo para a engrenagem
+MessagesPadding.PaddingTop = UDim.new(0, 0)    -- ZERADO PARA COLAR NO TOPO
+MessagesPadding.PaddingBottom = UDim.new(0, 0)
+MessagesPadding.Parent = MessagesArea
 
 local InputContainer = Instance.new("Frame")
 InputContainer.Name = "InputContainer"
@@ -332,10 +339,6 @@ local function AppendMessage(senderName, displayName, text, isMe)
 		nameColor, safeName, safeMsg
 	)
 
-	local Padding = Instance.new("UIPadding", MsgLabel)
-	Padding.PaddingTop = UDim.new(0, 1)
-	Padding.PaddingBottom = UDim.new(0, 1)
-
 	local ClickDetector = Instance.new("TextButton")
 	ClickDetector.Size = UDim2.new(1, 0, 1, 0)
 	ClickDetector.BackgroundTransparency = 1
@@ -394,7 +397,6 @@ local function ConnectWS()
 			if not isMe and IsDuplicate(data.username, data.message) then return end
 			if mutedPlayers[data.username] and not isMe then return end
 
-			-- Só processa e mostra balão se não for você (evita duplicar no eco)
 			if not isMe then
 				AppendMessage(data.username, data.nickname or data.username, data.message, false)
 				ShowBubble(data.username, data.message)
