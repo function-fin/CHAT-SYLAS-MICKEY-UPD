@@ -15,11 +15,10 @@ if PlayerGui:FindFirstChild("PrivateChatUI") then
 	PlayerGui.PrivateChatUI:Destroy()
 end
 
--- Paleta de Cores
 local COLORS = {
 	PanelBlack = Color3.fromRGB(0, 0, 0),
 	CardDark = Color3.fromRGB(16, 16, 16),
-	BlackInput = Color3.fromRGB(14, 14, 14),
+	BlackInput = Color3.fromRGB(0, 0, 0), -- Mais escuro
 	White = Color3.fromRGB(255, 255, 255),
 	SubText = Color3.fromRGB(170, 170, 170),
 	BorderDim = Color3.fromRGB(115, 115, 115),
@@ -47,7 +46,7 @@ local ChatSettings = {
 local mutedPlayers = {}
 local messagesByUser = {}
 
--- [AJUSTE 1] PRIORIDADE MÁXIMA SOBRE O JOGO
+-- [PRIORIDADE MÁXIMA]
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrivateChatUI"
 ScreenGui.ResetOnSpawn = false
@@ -61,7 +60,6 @@ NotificationSound.SoundId = SOUND_ID
 NotificationSound.Volume = 1
 NotificationSound.Parent = ScreenGui
 
--- Helpers
 local function EscapeRichText(text)
 	if not text then return "" end
 	text = tostring(text)
@@ -73,7 +71,6 @@ local function EscapeRichText(text)
 	return text
 end
 
--- [AJUSTE 2] DEDUPLICAÇÃO DE MENSAGENS
 local recentMessages = {}
 local DEDUP_WINDOW = 3
 
@@ -156,12 +153,12 @@ Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 local didToggleDrag = MakeDraggable(ToggleButton)
 
 -- ==========================================
--- PAINEL PRINCIPAL
+-- PAINEL PRINCIPAL (10% menor)
 -- ==========================================
 local MainPanel = Instance.new("Frame")
 MainPanel.Name = "ChatMainPanel"
-MainPanel.Size = UDim2.new(0, 460, 0, 315)
-MainPanel.Position = UDim2.new(0.5, -230, 0.5, -157)
+MainPanel.Size = UDim2.new(0, 414, 0, 283) -- Reduzido 10%
+MainPanel.Position = UDim2.new(0.5, -207, 0.5, -141)
 MainPanel.BackgroundColor3 = COLORS.PanelBlack
 MainPanel.BackgroundTransparency = 0.45
 MainPanel.BorderSizePixel = 0
@@ -182,7 +179,7 @@ ConfigButton.Parent = MainPanel
 
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
-MessagesArea.Size = UDim2.new(1, -24, 1, -104)
+MessagesArea.Size = UDim2.new(1, -24, 1, -95) -- Ajustado por conta da altura menor
 MessagesArea.Position = UDim2.new(0, 12, 0, 48)
 MessagesArea.BackgroundTransparency = 1
 MessagesArea.BorderSizePixel = 0
@@ -196,25 +193,27 @@ MessagesArea.Parent = MainPanel
 local MessagesLayout = Instance.new("UIListLayout")
 MessagesLayout.SortOrder = Enum.SortOrder.LayoutOrder
 MessagesLayout.Padding = UDim.new(0, 6)
-MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top -- Mantém no topo
+MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 MessagesLayout.Parent = MessagesArea
 
+-- [RODAPÉ MAIS ESCURO E SEM AVIÃOZINHO]
 local InputContainer = Instance.new("Frame")
 InputContainer.Name = "InputContainer"
-InputContainer.Size = UDim2.new(1, -24, 0, 40)
-InputContainer.Position = UDim2.new(0, 12, 1, -52)
+InputContainer.Size = UDim2.new(1, -24, 0, 38)
+InputContainer.Position = UDim2.new(0, 12, 1, -48)
 InputContainer.BackgroundColor3 = COLORS.BlackInput
-InputContainer.BackgroundTransparency = 0.35
+InputContainer.BackgroundTransparency = 0.05 -- Bem mais escuro que o fundo
+InputContainer.BorderSizePixel = 0
 InputContainer.Parent = MainPanel
 Instance.new("UICorner", InputContainer).CornerRadius = UDim.new(0, 8)
 
 local ChatInput = Instance.new("TextBox")
 ChatInput.Name = "ChatInput"
-ChatInput.Size = UDim2.new(1, -56, 1, 0)
+ChatInput.Size = UDim2.new(1, -20, 1, 0)
 ChatInput.Position = UDim2.new(0, 12, 0, 0)
 ChatInput.BackgroundTransparency = 1
 ChatInput.Text = ""
-ChatInput.PlaceholderText = "Click Here To Chat..."
+ChatInput.PlaceholderText = "Clique aqui para digitar..."
 ChatInput.PlaceholderColor3 = COLORS.SubText
 ChatInput.TextColor3 = COLORS.White
 ChatInput.Font = Enum.Font.GothamMedium
@@ -223,60 +222,8 @@ ChatInput.TextXAlignment = Enum.TextXAlignment.Left
 ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
--- [AJUSTE 3] AVIÃO DE PAPEL REAL (Asset)
-local SendButton = Instance.new("ImageButton")
-SendButton.Name = "SendButton"
-SendButton.Size = UDim2.new(0, 32, 0, 32)
-SendButton.Position = UDim2.new(1, -38, 0.5, -16)
-SendButton.BackgroundTransparency = 1
-SendButton.AutoButtonColor = false
-SendButton.ZIndex = 5
-SendButton.Parent = InputContainer
-
-local PaperPlane = Instance.new("ImageLabel")
-PaperPlane.Name = "PaperPlane"
-PaperPlane.Size = UDim2.new(0, 22, 0, 22)
-PaperPlane.Position = UDim2.new(0.5, -11, 0.5, -11)
-PaperPlane.AnchorPoint = Vector2.new(0.5, 0.5)
-PaperPlane.BackgroundTransparency = 1
-PaperPlane.Image = "rbxassetid://6034684930" 
-PaperPlane.ImageColor3 = COLORS.White
-PaperPlane.ScaleType = Enum.ScaleType.Fit
-PaperPlane.Parent = SendButton
-
-local function PlayPaperPlaneAnimation()
-	if not PaperPlane or not PaperPlane.Parent then return end
-	local originalPos = UDim2.new(0.5, -11, 0.5, -11)
-	local originalRot = 0
-
-	PaperPlane.Position = originalPos
-	PaperPlane.Rotation = originalRot
-	PaperPlane.ImageTransparency = 0
-
-	TweenService:Create(PaperPlane, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Position = UDim2.new(0.5, -8, 0.5, -16),
-		Rotation = -20
-	}):Play()
-
-	task.delay(0.12, function()
-		if not (PaperPlane and PaperPlane.Parent) then return end
-		TweenService:Create(PaperPlane, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Position = UDim2.new(1.2, 0, 0.3, -20),
-			Rotation = -50,
-			ImageTransparency = 1
-		}):Play()
-	end)
-
-	task.delay(0.4, function()
-		if not (PaperPlane and PaperPlane.Parent) then return end
-		PaperPlane.Position = originalPos
-		PaperPlane.Rotation = originalRot
-		PaperPlane.ImageTransparency = 0
-	end)
-end
-
 -- ==========================================
--- BALÃO DE MENSAGEM CUSTOMIZADO (BillboardGui)
+-- BALÃO DE MENSAGEM CUSTOMIZADO (Estilo original do Roblox)
 -- ==========================================
 local activeBubbles = {}
 
@@ -294,16 +241,17 @@ local function ShowBubble(username, message)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "CustomChatBubble"
 	billboard.Adornee = head
-	billboard.Size = UDim2.new(0, 200, 0, 50)
+	billboard.Size = UDim2.new(0, 250, 0, 80)
 	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = head
 	activeBubbles[username] = billboard
 
+	-- Fundo do balão (Preto escuro semi-transparente)
 	local bg = Instance.new("Frame")
 	bg.Size = UDim2.new(1, 0, 1, 0)
-	bg.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	bg.BackgroundTransparency = 0.1
+	bg.BackgroundColor3 = Color3.fromRGB(18, 18, 18) -- Fundo cinza escuro
+	bg.BackgroundTransparency = 0.2
 	bg.BorderSizePixel = 0
 	bg.Parent = billboard
 
@@ -311,23 +259,25 @@ local function ShowBubble(username, message)
 	corner.CornerRadius = UDim.new(0, 8)
 
 	local padding = Instance.new("UIPadding", bg)
-	padding.PaddingTop = UDim.new(0, 6)
-	padding.PaddingBottom = UDim.new(0, 6)
-	padding.PaddingLeft = UDim.new(0, 10)
-	padding.PaddingRight = UDim.new(0, 10)
+	padding.PaddingTop = UDim.new(0, 8)
+	padding.PaddingBottom = UDim.new(0, 8)
+	padding.PaddingLeft = UDim.new(0, 12)
+	padding.PaddingRight = UDim.new(0, 12)
 
+	-- Texto branco
 	local text = Instance.new("TextLabel")
 	text.Size = UDim2.new(1, 0, 1, 0)
 	text.BackgroundTransparency = 1
 	text.Text = message
-	text.TextColor3 = Color3.fromRGB(0, 0, 0)
+	text.TextColor3 = Color3.fromRGB(255, 255, 255)
 	text.Font = Enum.Font.GothamMedium
 	text.TextSize = 14
 	text.TextWrapped = true
 	text.TextXAlignment = Enum.TextXAlignment.Left
 	text.Parent = bg
 
-	task.delay(4, function()
+	-- Some após 5 segundos
+	task.delay(5, function()
 		if billboard and billboard.Parent then
 			billboard:Destroy()
 			activeBubbles[username] = nil
@@ -386,7 +336,7 @@ local function ShowToast(sender, msg)
 end
 
 -- ==========================================
--- [AJUSTE 4] APPEND MESSAGE (Visual limpo da imagem)
+-- APPEND MESSAGE (Visual limpo)
 -- ==========================================
 local function AppendMessage(senderName, displayName, text, isMe)
 	if mutedPlayers[senderName] and not isMe then return end
@@ -394,7 +344,7 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	local MsgLabel = Instance.new("TextLabel")
 	MsgLabel.Size = UDim2.new(1, -8, 0, 0)
 	MsgLabel.AutomaticSize = Enum.AutomaticSize.Y
-	MsgLabel.BackgroundTransparency = 1 -- Sem fundo, idêntico à imagem
+	MsgLabel.BackgroundTransparency = 1 
 	MsgLabel.BorderSizePixel = 0
 	MsgLabel.RichText = true
 	MsgLabel.Font = Enum.Font.GothamMedium
@@ -407,7 +357,6 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	local safeName = EscapeRichText(displayName or senderName)
 	local safeMsg  = EscapeRichText(text)
 	
-	-- Nome em azul, texto em branco
 	MsgLabel.Text = string.format(
 		"<font color='rgb(50,160,255)'>[%s]:</font> <font color='rgb(255,255,255)'>%s</font>",
 		safeName, safeMsg
@@ -417,7 +366,6 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	Padding.PaddingTop = UDim.new(0, 2)
 	Padding.PaddingBottom = UDim.new(0, 2)
 
-	-- Detector invisível para copiar texto
 	local ClickDetector = Instance.new("TextButton")
 	ClickDetector.Size = UDim2.new(1, 0, 1, 0)
 	ClickDetector.BackgroundTransparency = 1
@@ -466,7 +414,6 @@ local function ConnectWS()
 			local ok2, data = pcall(function() return HttpService:JSONDecode(raw) end)
 			if not (ok2 and data and data.message) then return end
 
-			-- Apenas mensagens do servidor atual
 			if data.serverId ~= CURRENT_SERVER_ID then return end
 
 			local isMe = (data.username == LocalPlayer.Name)
@@ -497,7 +444,7 @@ local function ConnectWS()
 end
 
 -- ==========================================
--- ENVIAR MENSAGEM
+-- ENVIAR MENSAGEM (Apenas via Enter/Teclado)
 -- ==========================================
 local function SendMessage()
 	local content = ChatInput.Text
@@ -518,14 +465,17 @@ local function SendMessage()
 
 	AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true)
 	ShowBubble(LocalPlayer.Name, content)
-	PlayPaperPlaneAnimation()
 end
 
-SendButton.MouseButton1Click:Connect(SendMessage)
-ChatInput.FocusLost:Connect(function(enterPressed) if enterPressed then SendMessage() end end)
+-- Dispara ao apertar Enter no PC ou no Teclado do Celular
+ChatInput.FocusLost:Connect(function(enterPressed) 
+	if enterPressed then 
+		SendMessage() 
+	end 
+end)
 
 -- ==========================================
--- CONFIGURAÇÃO
+-- CONFIGURAÇÃO (Mantida igual)
 -- ==========================================
 local ConfigPanel = Instance.new("Frame")
 ConfigPanel.Name = "ConfigPanel"
@@ -741,7 +691,6 @@ AddToggleControl(FreezeRow, ChatSettings.FreezeChat, function(isEnabled)
 	ChatSettings.FreezeChat = isEnabled
 end)
 
--- Abre/Fecha
 ToggleButton.MouseButton1Click:Connect(function()
 	if not didToggleDrag() then
 		MainPanel.Visible = not MainPanel.Visible
@@ -752,5 +701,4 @@ ConfigButton.MouseButton1Click:Connect(function()
 	ConfigPanel.Visible = not ConfigPanel.Visible
 end)
 
--- Inicia conexão
 task.spawn(ConnectWS)
