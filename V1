@@ -2,12 +2,11 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
-local ChatService = game:GetService("Chat") -- [NOVO] Balão nativo
+local ChatService = game:GetService("Chat")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Configuração do servidor de chat
 local WS_URL = "wss://free.blr2.piesocket.com/v3/1?api_key=iwYCQEyErMVj5txmeTDuzQ0Sle6V7tcAuOvlZQZp&notify_self=1"
 local CURRENT_SERVER_ID = (game.JobId ~= "" and game.JobId) or "STUDIO_SERVER"
 local SOUND_ID = "rbxassetid://1293433423"
@@ -177,12 +176,13 @@ ConfigButton.ScaleType = Enum.ScaleType.Fit
 ConfigButton.ZIndex = 15
 ConfigButton.Parent = MainPanel
 
--- [FIX LAYOUT] Área de mensagens começa abaixo do botão Config
--- PaddingLeft interno no ScrollingFrame compensa o recuo da esquerda
+-- ==========================================
+-- ÁREA DE MENSAGENS (CORRIGIDA)
+-- ==========================================
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
-MessagesArea.Size = UDim2.new(1, -24, 1, -94)      -- largura total menos margem simétrica
-MessagesArea.Position = UDim2.new(0, 12, 0, 46)    -- começa EXATAMENTE abaixo do ConfigButton (8+32=40, +6 de respiro)
+MessagesArea.Size = UDim2.new(1, -24, 1, -94)      
+MessagesArea.Position = UDim2.new(0, 12, 0, 46)    
 MessagesArea.BackgroundTransparency = 1
 MessagesArea.BorderSizePixel = 0
 MessagesArea.ScrollBarThickness = 4
@@ -194,17 +194,16 @@ MessagesArea.ClipsDescendants = true
 MessagesArea.ScrollingDirection = Enum.ScrollingDirection.Y
 MessagesArea.Parent = MainPanel
 
--- Padding interno: 8px laterais + 48px de recuo à direita (área do ConfigButton)
 local MessagesPadding = Instance.new("UIPadding")
 MessagesPadding.PaddingLeft = UDim.new(0, 4)
-MessagesPadding.PaddingRight = UDim.new(0, 48) -- reserva horizontal pro botão Config
-MessagesPadding.PaddingTop = UDim.new(0, 0)    -- [FIX] sem espaço no topo
+MessagesPadding.PaddingRight = UDim.new(0, 48) 
+MessagesPadding.PaddingTop = UDim.new(0, 2)    -- Dá um leve respiro no topo, mas não empurra para baixo
 MessagesPadding.PaddingBottom = UDim.new(0, 4)
 MessagesPadding.Parent = MessagesArea
 
 local MessagesLayout = Instance.new("UIListLayout")
 MessagesLayout.SortOrder = Enum.SortOrder.LayoutOrder
-MessagesLayout.Padding = UDim.new(0, 4)             -- [FIX] espaçamento compacto entre mensagens
+MessagesLayout.Padding = UDim.new(0, 2)             -- Espaçamento bem reduzido entre mensagens
 MessagesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 MessagesLayout.Parent = MessagesArea
@@ -235,7 +234,7 @@ ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
 -- ==========================================
--- [NOVO] BALÃO DE MENSAGEM NATIVO (ChatService)
+-- BALÃO DE MENSAGEM NATIVO (ChatService)
 -- ==========================================
 local function ShowBubble(username, message)
 	if mutedPlayers[username] then return end
@@ -311,7 +310,7 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	if mutedPlayers[senderName] and not isMe then return end
 
 	local MsgLabel = Instance.new("TextLabel")
-	MsgLabel.Size = UDim2.new(1, 0, 0, 0)                -- [FIX] sem offset lateral (padding cuida disso)
+	MsgLabel.Size = UDim2.new(1, 0, 0, 0)                
 	MsgLabel.AutomaticSize = Enum.AutomaticSize.Y
 	MsgLabel.BackgroundTransparency = 1
 	MsgLabel.BorderSizePixel = 0
@@ -361,7 +360,7 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	if not messagesByUser[senderName] then messagesByUser[senderName] = {} end
 	table.insert(messagesByUser[senderName], MsgLabel)
 
-	-- [FIX] Scroll suave para o fim (defer para o layout recalcular)
+	-- Rolagem suave para o fim
 	task.defer(function()
 		if MessagesArea and MessagesArea.Parent then
 			MessagesArea.CanvasPosition = Vector2.new(0, MessagesArea.AbsoluteCanvasSize.Y)
@@ -392,13 +391,10 @@ local function ConnectWS()
 
 			local isMe = (data.username == LocalPlayer.Name)
 
-			-- [FIX] Dedup só para mensagens de OUTROS players
-			-- Sua própria mensagem já foi renderizada localmente em SendMessage
 			if not isMe and IsDuplicate(data.username, data.message) then return end
-
 			if mutedPlayers[data.username] and not isMe then return end
 
-			-- [FIX] Só renderiza via WS se NÃO for você (evita duplicar no eco do servidor)
+			-- Só processa e mostra balão se não for você (evita duplicar no eco)
 			if not isMe then
 				AppendMessage(data.username, data.nickname or data.username, data.message, false)
 				ShowBubble(data.username, data.message)
@@ -431,9 +427,6 @@ local function SendMessage()
 	if not socket then warn("[PrivateChat] Sem conexão."); return end
 
 	ChatInput.Text = ""
-
-	-- [FIX] NÃO marca como duplicada localmente — quem marca é o IsDuplicate do WS
-	-- mas como bloqueamos o eco de isMe, não há risco de duplicar
 
 	local payload = {
 		username = LocalPlayer.Name,
