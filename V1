@@ -18,7 +18,7 @@ end
 local COLORS = {
 	PanelBlack = Color3.fromRGB(0, 0, 0),
 	CardDark = Color3.fromRGB(16, 16, 16),
-	BlackInput = Color3.fromRGB(0, 0, 0), -- Mais escuro
+	BlackInput = Color3.fromRGB(0, 0, 0),
 	White = Color3.fromRGB(255, 255, 255),
 	SubText = Color3.fromRGB(170, 170, 170),
 	BorderDim = Color3.fromRGB(115, 115, 115),
@@ -46,7 +46,6 @@ local ChatSettings = {
 local mutedPlayers = {}
 local messagesByUser = {}
 
--- [PRIORIDADE MÁXIMA]
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrivateChatUI"
 ScreenGui.ResetOnSpawn = false
@@ -153,11 +152,11 @@ Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 local didToggleDrag = MakeDraggable(ToggleButton)
 
 -- ==========================================
--- PAINEL PRINCIPAL (10% menor)
+-- PAINEL PRINCIPAL
 -- ==========================================
 local MainPanel = Instance.new("Frame")
 MainPanel.Name = "ChatMainPanel"
-MainPanel.Size = UDim2.new(0, 414, 0, 283) -- Reduzido 10%
+MainPanel.Size = UDim2.new(0, 414, 0, 283)
 MainPanel.Position = UDim2.new(0.5, -207, 0.5, -141)
 MainPanel.BackgroundColor3 = COLORS.PanelBlack
 MainPanel.BackgroundTransparency = 0.45
@@ -177,10 +176,11 @@ ConfigButton.ScaleType = Enum.ScaleType.Fit
 ConfigButton.ZIndex = 15
 ConfigButton.Parent = MainPanel
 
+-- [AJUSTE] Área de mensagens puxada para cima, mas com recuo na direita para não bater na engrenagem
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
-MessagesArea.Size = UDim2.new(1, -24, 1, -95) -- Ajustado por conta da altura menor
-MessagesArea.Position = UDim2.new(0, 12, 0, 48)
+MessagesArea.Size = UDim2.new(1, -60, 1, -85) -- Recuo de 60px na direita para fugir do botão Config
+MessagesArea.Position = UDim2.new(0, 12, 0, 38) -- Subiu de 48 para 38
 MessagesArea.BackgroundTransparency = 1
 MessagesArea.BorderSizePixel = 0
 MessagesArea.ScrollBarThickness = 4
@@ -196,13 +196,12 @@ MessagesLayout.Padding = UDim.new(0, 6)
 MessagesLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 MessagesLayout.Parent = MessagesArea
 
--- [RODAPÉ MAIS ESCURO E SEM AVIÃOZINHO]
 local InputContainer = Instance.new("Frame")
 InputContainer.Name = "InputContainer"
 InputContainer.Size = UDim2.new(1, -24, 0, 38)
 InputContainer.Position = UDim2.new(0, 12, 1, -48)
 InputContainer.BackgroundColor3 = COLORS.BlackInput
-InputContainer.BackgroundTransparency = 0.05 -- Bem mais escuro que o fundo
+InputContainer.BackgroundTransparency = 0.05
 InputContainer.BorderSizePixel = 0
 InputContainer.Parent = MainPanel
 Instance.new("UICorner", InputContainer).CornerRadius = UDim.new(0, 8)
@@ -223,7 +222,7 @@ ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
 -- ==========================================
--- BALÃO DE MENSAGEM CUSTOMIZADO (Estilo original do Roblox)
+-- BALÃO DE MENSAGEM CUSTOMIZADO
 -- ==========================================
 local activeBubbles = {}
 
@@ -247,10 +246,9 @@ local function ShowBubble(username, message)
 	billboard.Parent = head
 	activeBubbles[username] = billboard
 
-	-- Fundo do balão (Preto escuro semi-transparente)
 	local bg = Instance.new("Frame")
 	bg.Size = UDim2.new(1, 0, 1, 0)
-	bg.BackgroundColor3 = Color3.fromRGB(18, 18, 18) -- Fundo cinza escuro
+	bg.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 	bg.BackgroundTransparency = 0.2
 	bg.BorderSizePixel = 0
 	bg.Parent = billboard
@@ -264,7 +262,6 @@ local function ShowBubble(username, message)
 	padding.PaddingLeft = UDim.new(0, 12)
 	padding.PaddingRight = UDim.new(0, 12)
 
-	-- Texto branco
 	local text = Instance.new("TextLabel")
 	text.Size = UDim2.new(1, 0, 1, 0)
 	text.BackgroundTransparency = 1
@@ -276,7 +273,6 @@ local function ShowBubble(username, message)
 	text.TextXAlignment = Enum.TextXAlignment.Left
 	text.Parent = bg
 
-	-- Some após 5 segundos
 	task.delay(5, function()
 		if billboard and billboard.Parent then
 			billboard:Destroy()
@@ -336,7 +332,7 @@ local function ShowToast(sender, msg)
 end
 
 -- ==========================================
--- APPEND MESSAGE (Visual limpo)
+-- APPEND MESSAGE (Fonte maior)
 -- ==========================================
 local function AppendMessage(senderName, displayName, text, isMe)
 	if mutedPlayers[senderName] and not isMe then return end
@@ -348,7 +344,7 @@ local function AppendMessage(senderName, displayName, text, isMe)
 	MsgLabel.BorderSizePixel = 0
 	MsgLabel.RichText = true
 	MsgLabel.Font = Enum.Font.GothamMedium
-	MsgLabel.TextSize = 14
+	MsgLabel.TextSize = 16 -- [AJUSTE] Fonte maior (antes era 14)
 	MsgLabel.TextWrapped = true
 	MsgLabel.TextXAlignment = Enum.TextXAlignment.Left
 	MsgLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -444,7 +440,7 @@ local function ConnectWS()
 end
 
 -- ==========================================
--- ENVIAR MENSAGEM (Apenas via Enter/Teclado)
+-- ENVIAR MENSAGEM
 -- ==========================================
 local function SendMessage()
 	local content = ChatInput.Text
@@ -467,7 +463,6 @@ local function SendMessage()
 	ShowBubble(LocalPlayer.Name, content)
 end
 
--- Dispara ao apertar Enter no PC ou no Teclado do Celular
 ChatInput.FocusLost:Connect(function(enterPressed) 
 	if enterPressed then 
 		SendMessage() 
@@ -475,7 +470,7 @@ ChatInput.FocusLost:Connect(function(enterPressed)
 end)
 
 -- ==========================================
--- CONFIGURAÇÃO (Mantida igual)
+-- CONFIGURAÇÃO
 -- ==========================================
 local ConfigPanel = Instance.new("Frame")
 ConfigPanel.Name = "ConfigPanel"
