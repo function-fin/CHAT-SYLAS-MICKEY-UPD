@@ -3,6 +3,7 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local ChatService = game:GetService("Chat")
+local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -75,6 +76,13 @@ local function EscapeRichText(text)
 	return text
 end
 
+-- Função para limpar caracteres invisíveis que causam o bug do "SEGUNDOS"
+local function CleanInvisibleChars(str)
+    -- Remove caracteres de controle (ASCII 0-31) exceto o \n (quebra de linha)
+    -- Isso remove coisas como \0, \r que podem vir de macros do teclado
+    return str:gsub("[%z\1-\9\11\12\14-\31]", "")
+end
+
 local recentMessages = {}
 local DEDUP_WINDOW = 3
 
@@ -135,9 +143,6 @@ local function MakeDraggable(guiObject, dragHandle)
 	return function() return hasMoved end
 end
 
--- ==========================================
--- BOTÃO LATERAL
--- ==========================================
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Name = "ChatToggleButton"
 ToggleButton.Size = UDim2.new(0, 44, 0, 130)
@@ -156,9 +161,6 @@ ToggleButton.Parent = ScreenGui
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 MakeDraggable(ToggleButton)
 
--- ==========================================
--- PAINEL PRINCIPAL
--- ==========================================
 local MainPanel = Instance.new("Frame")
 MainPanel.Name = "ChatMainPanel"
 MainPanel.Size = UDim2.new(0, 414, 0, 283)
@@ -181,9 +183,6 @@ ConfigButton.ScaleType = Enum.ScaleType.Fit
 ConfigButton.ZIndex = 15
 ConfigButton.Parent = MainPanel
 
--- ==========================================
--- ÁREA DE MENSAGENS
--- ==========================================
 local MessagesArea = Instance.new("ScrollingFrame")
 MessagesArea.Name = "MessagesArea"
 MessagesArea.Size = UDim2.new(1, -24, 1, -58)      
@@ -216,9 +215,6 @@ MessagesPadding.PaddingTop = UDim.new(0, 0)
 MessagesPadding.PaddingBottom = UDim.new(0, 0)
 MessagesPadding.Parent = MessagesArea
 
--- ==========================================
--- INPUT CONTAINER E BOTÃO DE CANCELAR PV
--- ==========================================
 local InputContainer = Instance.new("Frame")
 InputContainer.Name = "InputContainer"
 InputContainer.Size = UDim2.new(1, -24, 0, 38)
@@ -255,9 +251,6 @@ CancelPrivateBtn.Visible = false
 CancelPrivateBtn.ZIndex = 10
 CancelPrivateBtn.Parent = InputContainer
 
--- ==========================================
--- BALÃO DE MENSAGEM NATIVO (ChatService)
--- ==========================================
 local function ShowBubble(username, message)
 	if mutedPlayers[username] then return end
 
@@ -275,9 +268,6 @@ local function ShowBubble(username, message)
 	end)
 end
 
--- ==========================================
--- TOAST (NOTIFICAÇÃO)
--- ==========================================
 local Toast = Instance.new("Frame")
 Toast.Name = "Toast"
 Toast.Size = UDim2.new(0.9, 0, 0, 40)
@@ -325,9 +315,6 @@ local function ShowToast(sender, msg)
 	end)
 end
 
--- ==========================================
--- SISTEMA DE MENSAGEM PRIVADA
--- ==========================================
 local function SetPrivateTarget(targetName)
 	currentPrivateTarget = targetName
 	if targetName then
@@ -345,9 +332,6 @@ CancelPrivateBtn.MouseButton1Click:Connect(function()
 	SetPrivateTarget(nil)
 end)
 
--- ==========================================
--- APPEND MESSAGE
--- ==========================================
 local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
 	if mutedPlayers[senderName] and not isMe then return end
 
@@ -362,9 +346,26 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
 	MsgLabel.TextWrapped = true
 	MsgLabel.TextXAlignment = Enum.TextXAlignment.Left
 	MsgLabel.TextYAlignment = Enum.TextYAlignment.Top
-	MsgLabel.TextTransparency = 0         -- Garante que o texto nunca fique invisível
-	MsgLabel.TextStrokeTransparency = 1   -- Evita contornos bugados
+	MsgLabel.TextTransparency = 0         
+	MsgLabel.TextStrokeTransparency = 1   
 	MsgLabel.Parent = MessagesArea
+
+	-- [PROTEÇÃO 1] Força o texto a ficar visível se o Roblox tentar apagar
+	MsgLabel:GetPropertyChangedSignal("TextTransparency"):Connect(function()
+		if MsgLabel.TextTransparency > 0 then
+			MsgLabel.TextTransparency = 0
+		end
+	end)
+	
+	-- [PROTEÇÃO 2] Monitoramento por alguns segundos para evitar bugs de renderização do Roblox
+	task.spawn(function()
+		for i = 1, 5 do
+			task.wait(0.1)
+			if MsgLabel and MsgLabel.Parent then
+				MsgLabel.TextTransparency = 0
+			end
+		end
+	end)
 
 	local safeName = EscapeRichText(displayName or senderName)
 	local safeMsg  = EscapeRichText(text)
@@ -422,9 +423,6 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
 	end)
 end
 
--- ==========================================
--- WEBSOCKET
--- ==========================================
 local socket
 local running = true
 
@@ -475,13 +473,14 @@ local function ConnectWS()
 	end
 end
 
--- ==========================================
--- ENVIAR MENSAGEM (COM COOLDOWN E COMANDO /CLEAR)
--- ==========================================
 local function SendMessage()
 	local content = ChatInput.Text
 	
 	-- Verifica se está vazio
+	if content:match("^%s*$") then return end
+
+	-- [PROTEÇÃO] Remove caracteres invisíveis que causam o bug do "SEGUNDOS"
+	content = CleanInvisibleChars(content)
 	if content:match("^%s*$") then return end
 
 	-- Comando /Clear (Limpa o chat localmente)
@@ -493,22 +492,6 @@ local function SendMessage()
 		end
 		ChatInput.Text = ""
 		return
-	end
-
-	-- [CORREÇÃO] Filtro anti-bug do "SEGUNDOS" e letras isoladas
-	-- Impede envio de 1 caractere (como "S" ou "s") que estava bugando o script
-	if #content == 1 then
-		if not string.match(content, "[%w%p%s]") then 
-			-- Se for um caractere de controle invisível, bloqueia
-			return
-		elseif string.match(content, "%a") then
-			-- Se for apenas uma letra, bloqueia para evitar o bug
-			ChatInput.TextColor3 = Color3.fromRGB(255, 100, 100)
-			task.delay(0.3, function()
-				if ChatInput then ChatInput.TextColor3 = COLORS.White end
-			end)
-			return
-		end
 	end
 
 	-- Sistema de Cooldown (5 segundos)
@@ -546,9 +529,6 @@ ChatInput.FocusLost:Connect(function(enterPressed)
 	end
 end)
 
--- ==========================================
--- CONFIGURAÇÃO
--- ==========================================
 local ConfigPanel = Instance.new("Frame")
 ConfigPanel.Name = "ConfigPanel"
 ConfigPanel.Size = UDim2.new(1, -36, 1, -110)
@@ -763,11 +743,6 @@ AddToggleControl(FreezeRow, ChatSettings.FreezeChat, function(isEnabled)
 	ChatSettings.FreezeChat = isEnabled
 end)
 
--- ==========================================
--- CONTROLE DE CLIQUE DO BOTÃO CHAT (CORRIGIDO)
--- ==========================================
--- Usando InputBegan/InputEnded diretamente para ignorar o MakeDraggable
--- e garantir que o clique sempre abra o painel, mesmo com o Freeze ativado.
 local toggleBtnPressed = false
 
 ToggleButton.InputBegan:Connect(function(input)
@@ -780,7 +755,6 @@ UserInputService.InputEnded:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
         if toggleBtnPressed then
             toggleBtnPressed = false
-            -- Verifica se o mouse/touch soltou em cima do botão antes de alternar
             local mousePos = input.Position
             local btnPos = ToggleButton.AbsolutePosition
             local btnSize = ToggleButton.AbsoluteSize
