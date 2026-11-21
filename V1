@@ -732,17 +732,17 @@ CloseActionBtn.MouseButton1Click:Connect(function()
 	ScreenGui:Destroy()
 end)
 
-local NotifRow = CreateOptionRow(2, ICONS.Bell, "Notificações", "Ative ou desative as notificações.", true)
+local NotifRow = CreateOptionRow(2, ICONS.Bell, "NOTIFICATION", "Ative ou desative as notificações.", true)
 AddToggleControl(NotifRow, ChatSettings.Notifications, function(isEnabled)
 	ChatSettings.Notifications = isEnabled
 end)
 
-local CopyRow = CreateOptionRow(3, ICONS.CopyText, "Copiar Textos", "Permite copiar textos e mensagens.", true)
+local CopyRow = CreateOptionRow(3, ICONS.CopyText, "COPY TEXT", "Permite copiar textos e mensagens.", true)
 AddToggleControl(CopyRow, ChatSettings.CopyText, function(isEnabled)
 	ChatSettings.CopyText = isEnabled
 end)
 
-local FreezeRow = CreateOptionRow(4, ICONS.Freeze, "Frizar", "Trava o arraste da interface e do botão externo.", false)
+local FreezeRow = CreateOptionRow(4, ICONS.Freeze, "FREEZE", "Trava o arraste da interface e do botão externo.", false)
 AddToggleControl(FreezeRow, ChatSettings.FreezeChat, function(isEnabled)
 	ChatSettings.FreezeChat = isEnabled
 end)
