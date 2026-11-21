@@ -36,7 +36,7 @@ local ICONS = {
 	Bell = "rbxassetid://106054450773402",
 	CopyText = "rbxassetid://89696314837335",
 	Freeze = "rbxassetid://121256149182197",
-	ClosePV = "rbxassetid://94498250014385" -- ID do Botão X atualizado
+	ClosePV = "rbxassetid://94498250014385"
 }
 
 local ChatSettings = {
@@ -48,8 +48,8 @@ local ChatSettings = {
 local mutedPlayers = {}
 local messagesByUser = {}
 local currentPrivateTarget = nil
-local lastMessageTime = 0 -- Variável para o Cooldown
-local COOLDOWN_TIME = 5     -- Tempo de recarga em segundos
+local lastMessageTime = 0
+local COOLDOWN_TIME = 5
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrivateChatUI"
@@ -154,7 +154,7 @@ ToggleButton.LineHeight = 1.15
 ToggleButton.Parent = ScreenGui
 
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
-local didToggleDrag = MakeDraggable(ToggleButton)
+MakeDraggable(ToggleButton)
 
 -- ==========================================
 -- PAINEL PRINCIPAL
@@ -244,7 +244,6 @@ ChatInput.TextXAlignment = Enum.TextXAlignment.Left
 ChatInput.ClearTextOnFocus = false
 ChatInput.Parent = InputContainer
 
--- Botão "X" (Usando o novo ID)
 local CancelPrivateBtn = Instance.new("ImageButton")
 CancelPrivateBtn.Name = "CancelPrivateBtn"
 CancelPrivateBtn.Size = UDim2.new(0, 20, 0, 20)
@@ -363,6 +362,8 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
 	MsgLabel.TextWrapped = true
 	MsgLabel.TextXAlignment = Enum.TextXAlignment.Left
 	MsgLabel.TextYAlignment = Enum.TextYAlignment.Top
+	MsgLabel.TextTransparency = 0         -- Garante que o texto nunca fique invisível
+	MsgLabel.TextStrokeTransparency = 1   -- Evita contornos bugados
 	MsgLabel.Parent = MessagesArea
 
 	local safeName = EscapeRichText(displayName or senderName)
@@ -494,10 +495,25 @@ local function SendMessage()
 		return
 	end
 
+	-- [CORREÇÃO] Filtro anti-bug do "SEGUNDOS" e letras isoladas
+	-- Impede envio de 1 caractere (como "S" ou "s") que estava bugando o script
+	if #content == 1 then
+		if not string.match(content, "[%w%p%s]") then 
+			-- Se for um caractere de controle invisível, bloqueia
+			return
+		elseif string.match(content, "%a") then
+			-- Se for apenas uma letra, bloqueia para evitar o bug
+			ChatInput.TextColor3 = Color3.fromRGB(255, 100, 100)
+			task.delay(0.3, function()
+				if ChatInput then ChatInput.TextColor3 = COLORS.White end
+			end)
+			return
+		end
+	end
+
 	-- Sistema de Cooldown (5 segundos)
 	local currentTime = os.clock()
 	if currentTime - lastMessageTime < COOLDOWN_TIME then
-		-- Feedback visual piscando vermelho
 		ChatInput.TextColor3 = Color3.fromRGB(255, 100, 100)
 		task.delay(0.3, function()
 			if ChatInput then ChatInput.TextColor3 = COLORS.White end
@@ -747,10 +763,33 @@ AddToggleControl(FreezeRow, ChatSettings.FreezeChat, function(isEnabled)
 	ChatSettings.FreezeChat = isEnabled
 end)
 
-ToggleButton.MouseButton1Click:Connect(function()
-	if not didToggleDrag() then
-		MainPanel.Visible = not MainPanel.Visible
-	end
+-- ==========================================
+-- CONTROLE DE CLIQUE DO BOTÃO CHAT (CORRIGIDO)
+-- ==========================================
+-- Usando InputBegan/InputEnded diretamente para ignorar o MakeDraggable
+-- e garantir que o clique sempre abra o painel, mesmo com o Freeze ativado.
+local toggleBtnPressed = false
+
+ToggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        toggleBtnPressed = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        if toggleBtnPressed then
+            toggleBtnPressed = false
+            -- Verifica se o mouse/touch soltou em cima do botão antes de alternar
+            local mousePos = input.Position
+            local btnPos = ToggleButton.AbsolutePosition
+            local btnSize = ToggleButton.AbsoluteSize
+            if mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSize.X and 
+               mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSize.Y then
+                MainPanel.Visible = not MainPanel.Visible
+            end
+        end
+    end
 end)
 
 ConfigButton.MouseButton1Click:Connect(function()
