@@ -56,6 +56,20 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
 
+local uiScale = Instance.new("UIScale")
+uiScale.Parent = ScreenGui
+
+local function updateUIScale()
+	if not UserInputService.TouchEnabled then
+		uiScale.Scale = 1.7 -- Aumenta 70% no PC
+	else
+		uiScale.Scale = 1.0 -- Padrão no Mobile
+	end
+end
+
+updateUIScale()
+UserInputService:GetPropertyChangedSignal("TouchEnabled"):Connect(updateUIScale)
+
 local NotificationSound = Instance.new("Sound")
 NotificationSound.SoundId = SOUND_ID
 NotificationSound.Volume = 1
