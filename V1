@@ -65,9 +65,6 @@ NotificationSound.SoundId = SOUND_ID
 NotificationSound.Volume = 1
 NotificationSound.Parent = ScreenGui
 
--- ==========================================================
--- FUNÇÕES DE LIMPEZA E ESCAPE (CORREÇÃO DO BUG "S")
--- ==========================================================
 local function EscapeRichText(text)
     if not text then return "" end
     text = tostring(text)
@@ -76,12 +73,12 @@ local function EscapeRichText(text)
     text = text:gsub(">", "&gt;")
     text = text:gsub('"', "&quot;")
     text = text:gsub("'", "&#39;")
-    return text
+    -- Adiciona um espaço de largura zero no final para evitar o bug de quebra com "s"
+    return text .. "\u{200B}"
 end
 
 local function CleanInvisibleChars(str)
     if not str then return "" end
-    -- Remove caracteres de controle invisíveis (ASCII 0-31, exceto \n que é 10)
     return str:gsub("[%z\1-\9\11\12\14-\31]", "")
 end
 
@@ -360,7 +357,7 @@ ChatInput.Text = ""
 ChatInput.PlaceholderText = "Clique aqui para digitar..."
 ChatInput.PlaceholderColor3 = COLORS.SubText
 ChatInput.TextColor3 = COLORS.White
-ChatInput.Font = Enum.Font.GothamMedium
+ChatInput.Font = Enum.Font.Gotham
 ChatInput.TextSize = 14
 ChatInput.TextXAlignment = Enum.TextXAlignment.Left
 ChatInput.ClearTextOnFocus = false
@@ -386,7 +383,6 @@ local function ShowBubble(username, message)
     local head = char:FindFirstChild("Head")
     if not head then return end
     pcall(function()
-        -- Limpa a mensagem antes de mandar para o balão
         ChatService:Chat(head, CleanInvisibleChars(message), Enum.ChatColor.White)
     end)
 end
@@ -417,7 +413,7 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
     MsgLabel.BackgroundTransparency = 1
     MsgLabel.BorderSizePixel = 0
     MsgLabel.RichText = true
-    MsgLabel.Font = Enum.Font.GothamMedium
+    MsgLabel.Font = Enum.Font.Gotham  -- Fonte alterada para evitar bug do "s"
     MsgLabel.TextSize = 16
     MsgLabel.TextWrapped = true
     MsgLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -441,7 +437,7 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
         end
     end)
 
-    -- CORREÇÃO APLICADA: Limpa caracteres invisíveis ANTES do Escape
+    -- CORREÇÃO APLICADA: Limpa caracteres invisíveis ANTES do Escape e adiciona espaço invisível
     local safeName = EscapeRichText(CleanInvisibleChars(displayName or senderName))
     local safeMsg  = EscapeRichText(CleanInvisibleChars(text))
 
@@ -607,6 +603,7 @@ ChatInput.FocusLost:Connect(function(enterPressed)
     end
 end)
 
+-- CONFIG PANEL (mantido integralmente)
 local ConfigPanel = Instance.new("Frame")
 ConfigPanel.Name = "ConfigPanel"
 ConfigPanel.Size = UDim2.new(1, -36, 1, -110)
