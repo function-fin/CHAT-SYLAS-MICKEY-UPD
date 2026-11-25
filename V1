@@ -65,6 +65,9 @@ NotificationSound.SoundId = SOUND_ID
 NotificationSound.Volume = 1
 NotificationSound.Parent = ScreenGui
 
+-- ==========================================================
+-- FUNÇÕES DE LIMPEZA E ESCAPE (CORREÇÃO DO BUG "S")
+-- ==========================================================
 local function EscapeRichText(text)
     if not text then return "" end
     text = tostring(text)
@@ -77,6 +80,8 @@ local function EscapeRichText(text)
 end
 
 local function CleanInvisibleChars(str)
+    if not str then return "" end
+    -- Remove caracteres de controle invisíveis (ASCII 0-31, exceto \n que é 10)
     return str:gsub("[%z\1-\9\11\12\14-\31]", "")
 end
 
@@ -270,8 +275,10 @@ local function ShowNotification(senderName, message, userId)
 
     NotificationSound:Play()
 
-    NotifName.Text = EscapeRichText(senderName)
-    NotifText.Text = EscapeRichText(message)
+    -- Aplica limpeza e escape nos textos da notificação
+    NotifName.Text = EscapeRichText(CleanInvisibleChars(senderName))
+    NotifText.Text = EscapeRichText(CleanInvisibleChars(message))
+    
     NotifAvatar.Image = GetThumbnail(userId)
 
     NotificationFrame.Visible = true
@@ -309,8 +316,8 @@ MessagesArea.Size = UDim2.new(1, -24, 1, -58)
 MessagesArea.Position = UDim2.new(0, 12, 0, 6)
 MessagesArea.BackgroundTransparency = 1
 MessagesArea.BorderSizePixel = 0
-MessagesArea.ScrollBarThickness = 0            -- REMOVIDO (sem barra visual)
-MessagesArea.ScrollBarImageTransparency = 1     -- REMOVIDO (barra invisível)
+MessagesArea.ScrollBarThickness = 0
+MessagesArea.ScrollBarImageTransparency = 1
 MessagesArea.CanvasSize = UDim2.new(0, 0, 0, 0)
 MessagesArea.ClipsDescendants = true
 MessagesArea.ScrollingDirection = Enum.ScrollingDirection.Y
@@ -379,7 +386,8 @@ local function ShowBubble(username, message)
     local head = char:FindFirstChild("Head")
     if not head then return end
     pcall(function()
-        ChatService:Chat(head, message, Enum.ChatColor.White)
+        -- Limpa a mensagem antes de mandar para o balão
+        ChatService:Chat(head, CleanInvisibleChars(message), Enum.ChatColor.White)
     end)
 end
 
@@ -433,8 +441,9 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
         end
     end)
 
-    local safeName = EscapeRichText(displayName or senderName)
-    local safeMsg  = EscapeRichText(text)
+    -- CORREÇÃO APLICADA: Limpa caracteres invisíveis ANTES do Escape
+    local safeName = EscapeRichText(CleanInvisibleChars(displayName or senderName))
+    local safeMsg  = EscapeRichText(CleanInvisibleChars(text))
 
     local nameColor = isMe and "rgb(80,220,120)" or "rgb(50,160,255)"
     local prefix = ""
@@ -504,25 +513,31 @@ local function ConnectWS()
             if not (ok2 and data and data.message) then return end
             if data.serverId ~= CURRENT_SERVER_ID then return end
 
-            local isMe = (data.username == LocalPlayer.Name)
+            -- CORREÇÃO: Limpa os dados recebidos do WebSocket
+            local cleanUsername = CleanInvisibleChars(data.username)
+            local cleanMessage = CleanInvisibleChars(data.message)
+            local cleanNickname = data.nickname and CleanInvisibleChars(data.nickname) or cleanUsername
+
+            local isMe = (cleanUsername == LocalPlayer.Name)
             local isTargetingMe = (data.target == LocalPlayer.Name)
             local isPrivate = (data.target ~= nil and data.target ~= "")
 
             if isPrivate and not isTargetingMe and not isMe then return end
-            if not isMe and IsDuplicate(data.username, data.message) then return end
-            if mutedPlayers[data.username] and not isMe then return end
+            if not isMe and IsDuplicate(cleanUsername, cleanMessage) then return end
+            if mutedPlayers[cleanUsername] and not isMe then return end
 
             if not isMe then
-                AppendMessage(data.username, data.nickname or data.username, data.message, false, isPrivate)
-                ShowBubble(data.username, data.message)
+                -- Passa a mensagem limpa para ser renderizada
+                AppendMessage(cleanUsername, cleanNickname, cleanMessage, false, isPrivate)
+                ShowBubble(cleanUsername, cleanMessage)
 
                 if not MainPanel.Visible and ChatSettings.Notifications then
-                    local plr = Players:FindFirstChild(data.username)
+                    local plr = Players:FindFirstChild(cleanUsername)
                     local uid = plr and plr.UserId or 0
                     if uid == 0 then
-                        pcall(function() uid = Players:GetUserIdFromNameAsync(data.username) end)
+                        pcall(function() uid = Players:GetUserIdFromNameAsync(cleanUsername) end)
                     end
-                    ShowNotification(data.nickname or data.username, data.message, uid)
+                    ShowNotification(cleanNickname, cleanMessage, uid)
                 end
             end
         end)
@@ -544,6 +559,7 @@ local function SendMessage()
 
     if content:match("^%s*$") then return end
 
+    -- CORREÇÃO: Limpeza rigorosa antes de enviar
     content = CleanInvisibleChars(content)
     if content:match("^%s*$") then return end
 
@@ -580,6 +596,7 @@ local function SendMessage()
     }
     pcall(function() socket:Send(HttpService:JSONEncode(payload)) end)
 
+    -- Renderiza localmente a mensagem já limpa
     AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true, currentPrivateTarget ~= nil)
     ShowBubble(LocalPlayer.Name, content)
 end
