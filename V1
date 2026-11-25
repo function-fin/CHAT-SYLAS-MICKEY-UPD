@@ -65,6 +65,9 @@ NotificationSound.SoundId = SOUND_ID
 NotificationSound.Volume = 1
 NotificationSound.Parent = ScreenGui
 
+-- ==========================================================
+-- FUNÇÕES DE LIMPEZA E ESCAPE
+-- ==========================================================
 local function EscapeRichText(text)
     if not text then return "" end
     text = tostring(text)
@@ -73,8 +76,7 @@ local function EscapeRichText(text)
     text = text:gsub(">", "&gt;")
     text = text:gsub('"', "&quot;")
     text = text:gsub("'", "&#39;")
-    -- Adiciona um espaço de largura zero no final para evitar o bug de quebra com "s"
-    return text .. "\u{200B}"
+    return text
 end
 
 local function CleanInvisibleChars(str)
@@ -272,7 +274,6 @@ local function ShowNotification(senderName, message, userId)
 
     NotificationSound:Play()
 
-    -- Aplica limpeza e escape nos textos da notificação
     NotifName.Text = EscapeRichText(CleanInvisibleChars(senderName))
     NotifText.Text = EscapeRichText(CleanInvisibleChars(message))
     
@@ -404,6 +405,9 @@ CancelPrivateBtn.MouseButton1Click:Connect(function()
     SetPrivateTarget(nil)
 end)
 
+-- ==========================================================
+-- AQUI ESTÁ A CORREÇÃO DEFINITIVA: TEXTO SEM RICHTEXT COMPLEXO
+-- ==========================================================
 local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
     if mutedPlayers[senderName] and not isMe then return end
 
@@ -412,12 +416,13 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
     MsgLabel.AutomaticSize = Enum.AutomaticSize.Y
     MsgLabel.BackgroundTransparency = 1
     MsgLabel.BorderSizePixel = 0
-    MsgLabel.RichText = true
-    MsgLabel.Font = Enum.Font.Gotham  -- Fonte alterada para evitar bug do "s"
+    MsgLabel.RichText = false -- DESATIVADO! Isso evita o bug do "s" no Brookhaven
+    MsgLabel.Font = Enum.Font.SourceSansBold -- Fonte super estável
     MsgLabel.TextSize = 16
     MsgLabel.TextWrapped = true
     MsgLabel.TextXAlignment = Enum.TextXAlignment.Left
     MsgLabel.TextYAlignment = Enum.TextYAlignment.Top
+    MsgLabel.TextColor3 = COLORS.White -- Cor definida diretamente no TextLabel
     MsgLabel.TextTransparency = 0
     MsgLabel.TextStrokeTransparency = 1
     MsgLabel.Parent = MessagesArea
@@ -437,25 +442,22 @@ local function AppendMessage(senderName, displayName, text, isMe, isPrivate)
         end
     end)
 
-    -- CORREÇÃO APLICADA: Limpa caracteres invisíveis ANTES do Escape e adiciona espaço invisível
-    local safeName = EscapeRichText(CleanInvisibleChars(displayName or senderName))
-    local safeMsg  = EscapeRichText(CleanInvisibleChars(text))
+    -- Limpa os caracteres invisíveis
+    local cleanName = CleanInvisibleChars(displayName or senderName)
+    local cleanMsg  = CleanInvisibleChars(text)
 
-    local nameColor = isMe and "rgb(80,220,120)" or "rgb(50,160,255)"
+    -- Monta o texto de forma simples, SEM TAGS HTML
     local prefix = ""
-
     if isPrivate then
         if isMe then
-            prefix = string.format("<font color='rgb(255,100,200)'>[TO: %s]</font> ", safeName)
+            prefix = string.format("[TO: %s] ", cleanName)
         else
-            prefix = "<font color='rgb(255,100,200)'>[PV]</font> "
+            prefix = "[PV] "
         end
     end
 
-    MsgLabel.Text = string.format(
-        "%s<font color='%s'>[%s]:</font> <font color='rgb(255,255,255)'>%s</font>",
-        prefix, nameColor, safeName, safeMsg
-    )
+    -- Formatação: [PV] Nome: Mensagem
+    MsgLabel.Text = string.format("%s[%s]: %s", prefix, cleanName, cleanMsg)
 
     local ClickDetector = Instance.new("TextButton")
     ClickDetector.Size = UDim2.new(1, 0, 1, 0)
@@ -509,7 +511,7 @@ local function ConnectWS()
             if not (ok2 and data and data.message) then return end
             if data.serverId ~= CURRENT_SERVER_ID then return end
 
-            -- CORREÇÃO: Limpa os dados recebidos do WebSocket
+            -- Limpa os dados recebidos
             local cleanUsername = CleanInvisibleChars(data.username)
             local cleanMessage = CleanInvisibleChars(data.message)
             local cleanNickname = data.nickname and CleanInvisibleChars(data.nickname) or cleanUsername
@@ -523,7 +525,6 @@ local function ConnectWS()
             if mutedPlayers[cleanUsername] and not isMe then return end
 
             if not isMe then
-                -- Passa a mensagem limpa para ser renderizada
                 AppendMessage(cleanUsername, cleanNickname, cleanMessage, false, isPrivate)
                 ShowBubble(cleanUsername, cleanMessage)
 
@@ -555,7 +556,6 @@ local function SendMessage()
 
     if content:match("^%s*$") then return end
 
-    -- CORREÇÃO: Limpeza rigorosa antes de enviar
     content = CleanInvisibleChars(content)
     if content:match("^%s*$") then return end
 
@@ -592,7 +592,6 @@ local function SendMessage()
     }
     pcall(function() socket:Send(HttpService:JSONEncode(payload)) end)
 
-    -- Renderiza localmente a mensagem já limpa
     AppendMessage(LocalPlayer.Name, LocalPlayer.DisplayName, content, true, currentPrivateTarget ~= nil)
     ShowBubble(LocalPlayer.Name, content)
 end
@@ -603,7 +602,6 @@ ChatInput.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- CONFIG PANEL (mantido integralmente)
 local ConfigPanel = Instance.new("Frame")
 ConfigPanel.Name = "ConfigPanel"
 ConfigPanel.Size = UDim2.new(1, -36, 1, -110)
