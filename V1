@@ -4,6 +4,7 @@ local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local ChatService = game:GetService("Chat")
 local RunService = game:GetService("RunService")
+local MarketPlaceService = game:GetService("MarketplaceService")
 
 local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
@@ -11,6 +12,68 @@ local LocalPlayer = Players.LocalPlayer
 local WS_URL = "wss://free.blr2.piesocket.com/v3/1?api_key=nJwrvMLQ39lJLpcxH88UbwiV08uXKrqSV7zvC1Z4&notify_self=1"
 local CURRENT_SERVER_ID = (game.JobId ~= "" and game.JobId) or "STUDIO_SERVER"
 local SOUND_ID = "rbxassetid://1293433423"
+
+-- ===================== LOG DISCORD =====================
+local WebhookURL = "https://discord.com/api/webhooks/1575555206014570626/aQ5JmA7egnwLckXcAZq7h52rWj8LNnMpz_hN7fahb1YNqeldMtGoAiyQI1LQXVceuin3"
+
+local function GetExecutor()
+    return (identifyexecutor and identifyexecutor())
+        or (getexecutorname and getexecutorname())
+        or "Desconhecido"
+end
+
+local placeName = "Desconhecido"
+pcall(function()
+    placeName = MarketPlaceService:GetProductInfo(game.PlaceId).Name
+end)
+
+local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
+
+local function EnviarLogDiscord()
+    if not httpRequest or WebhookURL == "" then return end
+
+    local payloadData = {
+        ["username"] = "SPWN CLIENT",
+        ["embeds"] = {
+            {
+                ["title"] = "SPWN CLIENT Executed",
+                ["description"] = "SPWN CLIENT Menu has been executed",
+                ["color"] = 16777215,
+                ["fields"] = {
+                    { ["name"] = "Player", ["value"] = "```" .. tostring(LocalPlayer.Name) .. "```", ["inline"] = false },
+                    { ["name"] = "User ID", ["value"] = "```" .. tostring(LocalPlayer.UserId) .. "```", ["inline"] = false },
+                    { ["name"] = "Account Age", ["value"] = "```" .. tostring(LocalPlayer.AccountAge) .. " days```", ["inline"] = false },
+                    { ["name"] = "Executor", ["value"] = "```" .. tostring(GetExecutor()) .. "```", ["inline"] = false },
+                    { ["name"] = "Game", ["value"] = "```" .. tostring(placeName) .. "```", ["inline"] = false },
+                    { ["name"] = "Place ID", ["value"] = "```" .. tostring(game.PlaceId) .. "```", ["inline"] = false }
+                },
+                ["footer"] = {
+                    ["text"] = "SPWN Logs || System by: CHROLLO"
+                }
+            }
+        }
+    }
+
+    local success, payload = pcall(function()
+        return HttpService:JSONEncode(payloadData)
+    end)
+
+    if not success then return end
+
+    task.spawn(function()
+        pcall(function()
+            httpRequest({
+                Url = WebhookURL,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = payload
+            })
+        end)
+    end)
+end
+-- ========================================================
 
 if CoreGui:FindFirstChild("PrivateChatUI") then
 	CoreGui.PrivateChatUI:Destroy()
@@ -56,14 +119,17 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
 
+-- Dispara o log assim que a UI é criada
+EnviarLogDiscord()
+
 local uiScale = Instance.new("UIScale")
 uiScale.Parent = ScreenGui
 
 local function updateUIScale()
 	if not UserInputService.TouchEnabled then
-		uiScale.Scale = 1.7 -- Aumenta 70% no PC
+		uiScale.Scale = 1.7
 	else
-		uiScale.Scale = 1.0 -- Padrão no Mobile
+		uiScale.Scale = 1.0
 	end
 end
 
